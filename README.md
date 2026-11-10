@@ -28,7 +28,7 @@ Kibble warns you when you have no food your pet will eat.
 
 ## Install
 
-Download the latest `Kibble.zip` from [Releases](../../releases) and unzip it so you end up with
+Download the latest `Kibble-vX.Y.Z.zip` from [Releases](../../releases) and unzip it so you end up with
 `World of Warcraft/_forever_/Interface/AddOns/Kibble/Kibble.toc`, then `/reload` or restart the game.
 
 ## Use
@@ -58,11 +58,14 @@ Bind a key under **Options > Key Bindings > AddOns > Kibble**.
 
 ## Development
 
-`tests/smoke.lua` runs `Kibble.lua` against a stub of the WoW API (no game needed):
+`tests/smoke.lua` runs the addon against a stub of the WoW API (no game needed); CI runs it on every push:
 
 ```
 luajit tests/smoke.lua Kibble.lua
 ```
+
+Releases are automatic: bump `## Version` in `Kibble.toc`, add a section to `CHANGELOG.md`, then push a
+`vX.Y.Z` tag (see [publishing/README.md](publishing/README.md), which also covers CurseForge and Wago).
 
 ## License
 

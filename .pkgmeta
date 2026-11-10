@@ -1,0 +1,14 @@
+# Used by the BigWigs packager (publish-stores.yml). The GitHub release zip is built by
+# scripts/package.sh instead.
+package-as: Kibble
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - tests
+  - art
+  - scripts
+  - publishing
+  - dist

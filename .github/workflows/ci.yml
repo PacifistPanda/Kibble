@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install -y luajit
+
+      - name: Syntax check
+        run: |
+          for f in *.lua tests/*.lua; do
+            luajit -bl "$f" > /dev/null
+          done
+
+      - name: Smoke tests (stubbed WoW API)
+        run: luajit tests/smoke.lua Kibble.lua
+
+      - name: CHANGELOG has an entry for the TOC version
+        run: scripts/release-notes.sh "$(sed -n 's/^## Version:[[:space:]]*//p' Kibble.toc | tr -d '\r')" > /dev/null
+
+      - name: Package builds with every file the TOC loads
+        run: scripts/package.sh

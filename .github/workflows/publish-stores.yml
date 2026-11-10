@@ -1,0 +1,34 @@
+name: Publish to CurseForge / Wago (manual)
+
+# NOT automatic. Run it by hand from the Actions tab, choosing a release TAG (not a branch) as the ref.
+# Prepare first: see publishing/README.md (create the projects, add the IDs to Kibble.toc, add the
+# CF_API_KEY and WAGO_API_TOKEN repository secrets). The first run should keep "dry run" ticked:
+# it builds the package without uploading anything.
+#
+# Unverified: the BigWigs packager documents no "WoW Forever" game version. Check in the dry-run log
+# which game version it picks for interface 16001 before doing a real upload.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build only, upload nothing"
+        type: boolean
+        default: true
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the packager reads tags and history
+
+      - name: Package and upload
+        uses: BigWigsMods/packager@v2
+        with:
+          args: ${{ inputs.dry_run && '-d' || '' }}
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+          # GITHUB_OAUTH is left out on purpose: the GitHub release is made by release.yml
