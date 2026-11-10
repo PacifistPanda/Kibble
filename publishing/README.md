@@ -3,6 +3,8 @@
 Everything here is **prepared, not done**: nothing has been uploaded, and no workflow publishes to the
 stores by itself. GitHub releases are already automatic (see "Releasing" below).
 
+> **Next step (planned 2026-11-11):** CurseForge upload first, then Wago; start at the "CurseForge" section below.
+
 ## What is in this folder
 
 - `description.md` - the project description, ready to paste into both sites (Markdown).
