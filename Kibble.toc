@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Kibble
+## Notes: One button to feed your hunter pet with the best food in your bags. Lights up when your pet is not happy and warns you when you run out of food. Right-click for settings.
+## Author: loggstar
+## Version: 1.1.0
+## SavedVariables: KibbleDB, FeedMeDB
+
+Kibble.lua

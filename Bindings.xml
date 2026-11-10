@@ -1,0 +1,4 @@
+<Bindings>
+	<Binding name="CLICK KibbleButton:LeftButton" header="KIBBLE" category="ADDONS">
+	</Binding>
+</Bindings>
