@@ -218,6 +218,39 @@ end
 
 ns.UpdateRestock = UpdateButton
 
+-- /kibble vendor: explains why the restock button is (not) showing for the open vendor.
+function ns.VendorDiag()
+	local P = K.Print
+	P(("merchant window shown: %s, tab: %s | pet out: %s"):format(
+		tostring(MerchantFrame and MerchantFrame:IsShown()), tostring(MerchantFrame and MerchantFrame.selectedTab),
+		tostring(K.PetIsOut())))
+	local n = GetMerchantNumItems() or 0
+	local unloaded, edible = 0, 0
+	for i = 1, n do
+		local id = GetMerchantItemID(i)
+		if id then
+			if not (C_Item.GetItemInfo(id)) then unloaded = unloaded + 1 end
+			local live = C_PetInfo and C_PetInfo.CanPetEatItem and C_PetInfo.CanPetEatItem(id)
+			local cached = K.PeekCanEat(id)
+			if live or cached then
+				edible = edible + 1
+				local info = C_MerchantFrame.GetItemInfo(i)
+				P(("  #%d %s | pet can eat now: %s, cached answer: %s | token cost: %s, ignored: %s"):format(
+					i, K.ItemName(id), tostring(live), tostring(cached),
+					tostring(info and info.hasExtendedCost and true or false), tostring(K.Settings().ignored[id] == true)))
+			end
+		end
+	end
+	P(("%d items for sale, %d edible by your pet, %d with item data not loaded yet"):format(n, edible, unloaded))
+	local plan = Plan()
+	if plan then
+		P(("plan: buy %d (have %d, reason when 0: %s)"):format(plan.qty, plan.have, tostring(plan.reason)))
+	else
+		P("plan: none, so the button is hidden")
+	end
+	P(("button created: %s, shown: %s"):format(tostring(button ~= nil), tostring(button and button:IsShown() or false)))
+end
+
 ---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------

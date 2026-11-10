@@ -878,6 +878,9 @@ SlashCmdList.KIBBLE = function(msg)
 			end
 		end
 		if not any then Print("your pet has no buffs (or no pet is out).") end
+	elseif msg == "vendor" then
+		-- diagnostic: with a vendor open, explains why the restock button is (not) showing
+		if ns.VendorDiag then ns.VendorDiag() else Print("vendor diagnostics unavailable.") end
 	elseif msg == "reset" then
 		if InCombatLockdown() then Print("can't move the button in combat.") return end
 		KibbleDB.pos = nil
@@ -911,4 +914,5 @@ ns.core = {
 	OpenMenu    = OpenMenu,
 	PlayAlertSound = PlayAlertSound,
 	UpdateFeeding  = UpdateFeeding,
+	PeekCanEat     = function(itemID) return canEatCache[itemID] end, -- cached answer, for diagnostics
 }

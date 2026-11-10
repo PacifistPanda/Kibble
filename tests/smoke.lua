@@ -335,6 +335,17 @@ bought = {}; rst.scripts.OnClick(); rev(nil, "MERCHANT_CLOSED"); assert(chatlog[
 deliver(); rev(nil, "BAG_UPDATE_DELAYED"); assert(#bought == 1, "no further purchases after the vendor closed")
 print("restock limits OK")
 
+-- /kibble vendor diagnostic
+merchant = { { id = 999, price = 10, stack = 1, maxStack = 20 }, { id = 20, price = 25, stack = 5, maxStack = 20 } }
+chatlog = {}; reset_food{ [1] = { 11, 3 } }; SlashCmdList.KIBBLE("vendor")
+local diag = table.concat(chatlog, "\n")
+assert(diag:find("pet out: true") and diag:find("Food20") and not diag:find("Food999"), "diagnostic lists only the edible vendor food: "..diag)
+assert(diag:find("plan: buy 40"), "diagnostic reports the plan: "..diag)
+petExists = false; chatlog = {}; SlashCmdList.KIBBLE("vendor")
+assert(table.concat(chatlog, "\n"):find("plan: none"), "diagnostic explains a hidden button when no pet is out")
+petExists = true
+print("vendor diagnostic OK")
+
 -- ===== options panel, minimap button, compartment =====
 assert(type(Kibble_OnCompartmentClick) == "function" and type(Kibble_OnCompartmentEnter) == "function", "compartment globals")
 frames[3].st["script:OnEvent"](frames[3].p, "PLAYER_LOGIN")
