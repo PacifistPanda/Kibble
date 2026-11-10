@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e3446"/><stop offset="1" stop-color="#12141c"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6ee07f"/><stop offset="1" stop-color="#2faa55"/>
+    </linearGradient>
+    <linearGradient id="bowl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f9de0"/><stop offset="1" stop-color="#1d4a8a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.55">
+      <stop offset="0" stop-color="#ffcf7a" stop-opacity="0.28"/><stop offset="1" stop-color="#ffcf7a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="piece" cx="0.35" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#e9a355"/><stop offset="1" stop-color="#9a5a22"/>
+    </radialGradient>
+  </defs>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1f2b"/><stop offset="1" stop-color="#0d0f15"/>
+    </linearGradient>
+    <radialGradient id="spot" cx="0.27" cy="0.5" r="0.45">
+      <stop offset="0" stop-color="#2faa55" stop-opacity="0.22"/><stop offset="1" stop-color="#2faa55" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#page)"/>
+  <rect width="1280" height="640" fill="url(#spot)"/>
+  <rect x="0" y="624" width="1280" height="16" fill="url(#ring)"/>
+
+  <g transform="translate(110 100) scale(1.6)">
+
+  <rect x="8" y="8" width="240" height="240" rx="50" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="50" fill="url(#glow)"/>
+  <rect x="15" y="15" width="226" height="226" rx="44" fill="none" stroke="url(#ring)" stroke-width="7"/>
+
+  <!-- back of the bowl (inside) -->
+  <ellipse cx="128" cy="142" rx="78" ry="17" fill="#173766"/>
+
+  <!-- kibble heap -->
+  <g stroke="#5e3513" stroke-width="2.5" fill="url(#piece)">
+    <ellipse cx="128" cy="86"  rx="15" ry="11" transform="rotate(-18 128 86)"/>
+    <ellipse cx="104" cy="100" rx="15" ry="11" transform="rotate(24 104 100)"/>
+    <ellipse cx="153" cy="99"  rx="15" ry="11" transform="rotate(-30 153 99)"/>
+    <ellipse cx="82"  cy="118" rx="15" ry="11" transform="rotate(-12 82 118)"/>
+    <ellipse cx="128" cy="110" rx="15" ry="11" transform="rotate(10 128 110)"/>
+    <ellipse cx="174" cy="117" rx="15" ry="11" transform="rotate(32 174 117)"/>
+    <ellipse cx="104" cy="128" rx="15" ry="11" transform="rotate(-26 104 128)"/>
+    <ellipse cx="152" cy="128" rx="15" ry="11" transform="rotate(18 152 128)"/>
+    <ellipse cx="128" cy="134" rx="14" ry="10" transform="rotate(-6 128 134)"/>
+  </g>
+  <!-- small highlights on the top pieces -->
+  <g fill="#fff3d6" opacity="0.55">
+    <ellipse cx="123" cy="82"  rx="5" ry="2.6" transform="rotate(-18 123 82)"/>
+    <ellipse cx="99"  cy="96"  rx="5" ry="2.6" transform="rotate(24 99 96)"/>
+    <ellipse cx="148" cy="95"  rx="5" ry="2.6" transform="rotate(-30 148 95)"/>
+    <ellipse cx="123" cy="106" rx="5" ry="2.6" transform="rotate(10 123 106)"/>
+  </g>
+
+  <!-- front of the bowl -->
+  <path d="M50 142 A78 17 0 0 0 206 142 C206 192 177 218 128 218 C79 218 50 192 50 142 Z"
+        fill="url(#bowl)" stroke="#12315c" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M50 142 A78 17 0 0 0 206 142" fill="none" stroke="#9fd0ff" stroke-width="4" stroke-linecap="round"/>
+  <!-- bowl band + shine -->
+  <path d="M62 168 C80 190 104 198 128 198 C152 198 176 190 194 168" fill="none" stroke="#9fd0ff" stroke-width="3" opacity="0.35" stroke-linecap="round"/>
+  <path d="M66 150 C68 166 74 176 84 184" fill="none" stroke="#fff" stroke-width="5" opacity="0.28" stroke-linecap="round"/>
+</g>
+
+  <g font-family="Fira Sans, DejaVu Sans, sans-serif">
+    <text x="580" y="300" font-size="150" font-weight="800" fill="#f4f1ea">Kibble</text>
+    <text x="584" y="372" font-size="40" font-weight="500" fill="#9fd0ff">One-button hunter pet feeding</text>
+    <text x="584" y="426" font-size="30" font-weight="400" fill="#aab0c0">A WoW Forever addon · right-click for settings</text>
+    <g transform="translate(584 478)">
+      <circle cx="14" cy="14" r="12" fill="#e0524f"/><circle cx="54" cy="14" r="12" fill="#f0c23c"/><circle cx="94" cy="14" r="12" fill="#4cd964"/>
+    </g>
+  </g>
+</svg>
