@@ -503,6 +503,9 @@ local function Refresh()
 
 	local state = PetState()
 	lastPetState = state
+	-- the vendor restock button follows the pet's real state (Restock.lua); doing it here rides on
+	-- the same debounced refresh as the main button instead of racing the pet frame on UNIT_PET
+	if ns.UpdateRestock then ns.UpdateRestock() end
 	if S.petCare and state ~= "out" then
 		-- no living pet: the button offers to revive it (dead) or call it (missing)
 		local spell = state == "dead" and REVIVE_PET_SPELL_ID or CALL_PET_SPELL_ID

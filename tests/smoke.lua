@@ -335,6 +335,21 @@ bought = {}; rst.scripts.OnClick(); rev(nil, "MERCHANT_CLOSED"); assert(chatlog[
 deliver(); rev(nil, "BAG_UPDATE_DELAYED"); assert(#bought == 1, "no further purchases after the vendor closed")
 print("restock limits OK")
 
+-- restock button follows the pet's real state (regression: summoning the pet after the vendor opened)
+merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }
+reset_food{ [1] = { 11, 3 } }; money = 100000; petExists = false
+ev(nil, "UNIT_PET", "player"); rev(nil, "MERCHANT_SHOW"); assert(not rst.shown, "no button while the pet is missing")
+petExists = true; ev(nil, "UNIT_PET", "player")
+assert(rst.shown and rst.text == "Restock pet food (buy 40)", "button appears once the pet is back, without a vendor event: "..tostring(rst.text))
+-- picks among affordable foods instead of failing on the best one
+lvl[22] = 5; lvl[23] = 30
+merchant = { { id = 23, price = 500, stack = 1, maxStack = 20 }, { id = 22, price = 5, stack = 1, maxStack = 20 } }
+money = 100; KibbleDB.settings.foodMode = "save"; rev(nil, "MERCHANT_UPDATE")
+assert(rst.text == "Restock pet food (buy 20)", "buys the affordable food when the best is too dear: "..tostring(rst.text))
+money = 1; rev(nil, "MERCHANT_UPDATE"); assert(rst.shown and not rst.enabled and rst.text == "Can't afford pet food", "says why when nothing is affordable: "..tostring(rst.text))
+money = 100000; merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }; rev(nil, "MERCHANT_UPDATE")
+print("restock follows pet + affordability OK")
+
 -- /kibble vendor diagnostic
 merchant = { { id = 999, price = 10, stack = 1, maxStack = 20 }, { id = 20, price = 25, stack = 5, maxStack = 20 } }
 chatlog = {}; reset_food{ [1] = { 11, 3 } }; SlashCmdList.KIBBLE("vendor")

@@ -66,6 +66,15 @@ local function Plan()
 	if MerchantFrame and (MerchantFrame.selectedTab or 1) ~= 1 then return nil end -- not the buyback tab
 
 	local foods = VendorFoods()
+	-- pick among the foods you can pay for; if you can't afford any, rank them all so the button
+	-- can still say why
+	local money = GetMoney()
+	local affordable = {}
+	for id, index in pairs(foods) do
+		local info = C_MerchantFrame.GetItemInfo(index)
+		if info and (info.price or 0) <= money then affordable[id] = index end
+	end
+	if next(affordable) then foods = affordable end
 	local counts = {}
 	for itemID in pairs(foods) do counts[itemID] = C_Item.GetItemCount(itemID) end
 	local itemID = K.ChooseFood(counts)
