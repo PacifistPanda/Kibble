@@ -20,7 +20,14 @@ local btn, bstore = proxy()
 local handlers = {}
 local combat = false
 local drivers = {}
-CreateFrame = function(_, name)
+cd = { last = nil }
+local cdp
+cdp = setmetatable({}, { __index = function(t, k)
+  if k == "SetCooldown" then return function(_, st, d) cd.last = { st, d } end end
+  if k == "Clear" then return function() cd.last = nil end end
+  return function() return cdp end end })
+CreateFrame = function(_, name, _, template)
+  if template == "CooldownFrameTemplate" then return cdp end
   if name == "KibbleButton" then return btn end
   local f, st = proxy(); handlers.events = st; return f
 end
@@ -39,7 +46,7 @@ C_Timer = { After = function(_, f) f() end }
 C_Texture = { GetAtlasInfo = function() return nil end }
 InCombatLockdown = function() return combat end
 RegisterStateDriver = function(_, st, ex) drivers[#drivers+1] = ex end
-GetTime = function() return 1000 end
+clock = 1000; GetTime = function() return clock end
 STANDARD_TEXT_FONT = "x"; NUM_BAG_SLOTS = 4; wipe = function(t) for k in pairs(t) do t[k]=nil end end
 GameTooltip = proxy(); GameTooltip_Hide = function() end; SlashCmdList = {}; IsShiftKeyDown = function() return false end
 -- menu recorder
@@ -50,8 +57,10 @@ local function node(label, tree) local n = { label = label, kids = {} }
   return n end
 local menuRoot
 MenuUtil = { CreateContextMenu = function(_, build) menuRoot = node("root"); build(nil, menuRoot) end }
-RaidNotice_AddMessage = nil; UIErrorsFrame = { AddMessage = function(_, m) print("SCREEN", m) end }; ChatTypeInfo = {}
-PlaySound = function() print("SOUND") end
+RaidNotice_AddMessage = nil; shown = {}; UIErrorsFrame = { AddMessage = function(_, m) shown[#shown+1] = m; print("SCREEN", m) end }; ChatTypeInfo = {}
+played = {}; PlaySound = function(id) played[#played+1] = id end
+SOUNDKIT = { RAID_WARNING = 1, TELL_MESSAGE = 2, IG_QUEST_LIST_COMPLETE = 3, IG_QUEST_LIST_OPEN = 4 }
+channel = nil; UnitChannelInfo = function() if channel then return unpack(channel) end end
 
 local chunk = assert(loadfile(path)); chunk("Kibble")
 FeedMeDB = { pos = { "TOP", "TOP", 7, 9 } }; KibbleDB = nil   -- pre-rename saved data
@@ -111,5 +120,61 @@ assert(bstore.size == 32 and drivers[#drivers] == "hide", "deferred layout appli
 KibbleDB.settings.alertSound = false; KibbleDB.settings.alertChat = false
 for k in pairs(items) do items[k] = nil end
 ev(nil, "UNIT_PET", "player"); ev(nil, "BAG_UPDATE_DELAYED")   -- hadFood nil -> no "out of food" alert expected
+
+-- ===== 1.2 features =====
+assert(KibbleDB.settings.alertSound == false and KibbleDB.settings.lowFood == 0, "sound + low-food default OFF")
+local alerts = find(menuRoot, "Alerts")
+local function reset_food(items_) for k in pairs(items) do items[k] = nil end for k, v in pairs(items_) do items[k] = v end end
+KibbleDB.settings.alertScreen = true; KibbleDB.settings.alertChat = false; KibbleDB.settings.throttle = 15
+
+-- low-food warning
+reset_food{ [1] = { 10, 50 } }; clock = clock + 100; ev(nil, "UNIT_PET", "player"); shown = {}
+find(alerts, "10 or fewer").set(); assert(#shown == 0, "no warning while food above threshold")
+items[1] = { 10, 8 }; clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED")
+assert(#shown == 1 and shown[1]:find("low on pet food %(8 left%)"), "warns when dropping to threshold: "..tostring(shown[1]))
+clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED"); assert(#shown == 1, "no repeat while still low")
+items[1] = { 10, 50 }; ev(nil, "BAG_UPDATE_DELAYED")
+items[1] = { 10, 6 }; clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED"); assert(#shown == 2, "re-armed after restocking")
+find(alerts, "Off").set(); items[1] = { 10, 50 }; ev(nil, "BAG_UPDATE_DELAYED"); items[1] = { 10, 1 }; clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED")
+assert(#shown == 2, "Off disables the warning"); assert(#played == 0, "no sound while sound is off (default)")
+print("low-food warning OK")
+
+-- sound opt-in + picker
+find(alerts, "Whisper ping").set(); assert(played[#played] == 2, "picker previews the sound")
+KibbleDB.settings.alertSound = true; KibbleDB.settings.lowFood = 10; items[1] = { 10, 50 }; ev(nil, "BAG_UPDATE_DELAYED")
+local n = #played; items[1] = { 10, 4 }; clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED")
+assert(#played == n + 1 and played[#played] == 2, "alert plays the chosen sound once sound is enabled")
+KibbleDB.settings.alertSound = false; KibbleDB.settings.lowFood = 0
+print("sound opt-in OK")
+
+-- smallest-stack mode (pet level 20: foods 11 (lvl16) and 12 (lvl25) both give full happiness)
+reset_food{ [1] = { 11, 30 }, [2] = { 12, 3 } }; ev(nil, "UNIT_PET", "player")
+local food = find(menuRoot, "Food")
+find(food, "Save best food (cheapest that still fully feeds)").set(); assert(macro():find("item:11"), "save mode -> lowest level")
+find(food, "Smallest stack first (frees bag space)").set(); assert(macro():find("item:12"), "stack mode -> smallest stack: "..macro())
+reset_food{ [1] = { 11, 3 }, [2] = { 12, 3 } }; ev(nil, "UNIT_PET", "player"); assert(macro():find("item:11"), "stack tie -> lower level")
+reset_food{ [1] = { 10, 1 }, [2] = { 12, 9 } }; ev(nil, "UNIT_PET", "player"); assert(macro():find("item:12"), "stack mode still only prefers foods that fully feed")
+find(food, "Save best food (cheapest that still fully feeds)").set()
+print("smallest-stack mode OK")
+
+-- feeding countdown
+local look2 = find(menuRoot, "Appearance")
+channel = { "Feed Pet", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player")
+assert(cd.last and cd.last[1] == 5 and cd.last[2] == 10, "countdown started")
+channel = nil; ev(nil, "UNIT_SPELLCAST_CHANNEL_STOP", "player"); assert(cd.last == nil, "countdown cleared")
+channel = { "Other Spell", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player"); assert(cd.last == nil, "ignores other channels")
+find(look2, "Show feeding countdown").set(); channel = { "Feed Pet", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player")
+assert(cd.last == nil, "countdown can be turned off"); find(look2, "Show feeding countdown").set()
+print("feeding countdown OK")
+
+-- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)
+local c2 = assert(loadfile(arg[1] or "Kibble.lua"))
+KibbleDB = { settings = { alertSound = true, size = 52 } }; FeedMeDB = nil; c2("Kibble")
+handlers.events["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
+assert(KibbleDB.settings.alertSound == false and KibbleDB.settings.size == 52 and KibbleDB.settings.settingsVersion == 2, "1.1.0 'sound on' reset once, other settings kept")
+KibbleDB.settings.alertSound = true; c2("Kibble"); handlers.events["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
+assert(KibbleDB.settings.alertSound == true, "a deliberate opt-in survives later loads")
+print("sound migration OK")
+
 print("slash:"); SlashCmdList.KIBBLE("config"); assert(menuRoot); SlashCmdList.KIBBLE("")
 print("ALL OK")

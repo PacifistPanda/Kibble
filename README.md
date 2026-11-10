@@ -13,11 +13,12 @@ Kibble warns you when you have no food your pet will eat.
 - **One click (or key press) feeding.** Picks the food for you. By default it saves your best food: it uses
   the cheapest food that still fully feeds your pet, and the highest level food otherwise.
 - **Mood ring.** Green, yellow or red around the button, pulsing when the pet is not happy.
-- **No-food warnings.** On-screen message, chat line and sound, rate limited.
+- **No-food and low-food warnings.** On-screen message and chat line, rate limited. Optionally warn when you're down to 5, 10 or 20 foods, and play a sound (off by default; pick from four).
+- **Feeding countdown.** A swipe on the button while Feed Pet is channelling.
 - **Right-click settings menu**
-  - *Alerts:* on-screen / chat / sound / "getting hungry" hint, and how often alerts may repeat.
-  - *Appearance:* size and opacity presets, lock position, show the food count and "NO FOOD" text, reset position.
-  - *Food:* "save best food" or "always best food", plus an ignore list of foods Kibble must never use.
+  - *Alerts:* on-screen / chat / sound (opt-in) / "getting hungry" hint, a low-food threshold, the alert sound, and how often alerts may repeat.
+  - *Appearance:* size and opacity presets, lock position, show the food count, "NO FOOD" text and feeding countdown, reset position.
+  - *Food:* "save best food", "smallest stack first" (frees bag space) or "always best food", plus an ignore list of foods Kibble must never use.
   - *Visibility:* always shown, faded while the pet is happy, or hidden.
 - Only loads for hunters; the button only shows while a living pet is out.
 

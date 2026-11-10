@@ -33,15 +33,19 @@ if playerClass ~= "HUNTER" then return end
 local DEFAULTS = {
 	alertScreen = true,    -- on-screen warning
 	alertChat   = true,    -- red chat line
-	alertSound  = true,
+	alertSound  = false,   -- opt-in: sounds are never played unless the user turns this on
+	soundChoice = "RAID_WARNING", -- key into SOUNDKIT, see SOUND_CHOICES
 	hungryHint  = true,    -- "your pet is getting hungry" chat hint
+	lowFood     = 0,       -- warn once when edible food drops to this many or fewer (0 = off)
+	showFeeding = true,    -- countdown swipe on the button while Feed Pet is channelling
 	throttle    = 30,      -- seconds between repeated alerts
 	size        = 40,
 	opacity     = 1,
 	locked      = false,
 	showCount   = true,
 	showNoFood  = true,
-	foodMode    = "save",  -- "save" = cheapest food that still gives full happiness; "best" = highest level
+	foodMode    = "save",  -- "save" = cheapest food that still gives full happiness; "best" = highest level;
+	                       -- "stack" = smallest stack among the foods that still give full happiness
 	visibility  = "always", -- "always" | "unhappy" (fades while happy) | "hidden"
 }
 
@@ -56,6 +60,12 @@ local function LoadSettings()
 		if saved[k] == nil then saved[k] = v end
 	end
 	saved.ignored = saved.ignored or {}
+	-- Settings version 2: sound alerts became opt-in. 1.1.0 defaulted them to on, so anyone who
+	-- has a saved "on" from that default gets it switched off once; they can turn it back on.
+	if (saved.settingsVersion or 1) < 2 then
+		saved.alertSound = false
+		saved.settingsVersion = 2
+	end
 	S = saved
 end
 
@@ -166,18 +176,22 @@ local function FindBestFood()
 	local counts = ScanFood(false)
 
 	-- rank ("save" mode): food that gives full happiness first (lowest level of those, to save
-	-- better food); otherwise the highest-level food available. "best" mode always takes the
-	-- highest level.
+	-- better food); otherwise the highest-level food available. "stack" mode is the same but picks
+	-- the smallest stack of the full-happiness foods (frees bag space). "best" mode always takes
+	-- the highest level.
 	local best, bestFull, bestLevel, total = nil, false, nil, 0
 	for itemID, count in pairs(counts) do
 		total = total + count
 		local lvl = GetItemLevel(itemID) or 0
-		local full = S.foodMode == "save" and petLevel ~= nil and lvl >= petLevel - FULL_GAIN_LEVEL_GAP
+		local full = S.foodMode ~= "best" and petLevel ~= nil and lvl >= petLevel - FULL_GAIN_LEVEL_GAP
 		local better
 		if best == nil then
 			better = true
 		elseif full ~= bestFull then
 			better = full
+		elseif full and S.foodMode == "stack" then
+			local c, bc = count, counts[best]
+			better = c < bc or (c == bc and (lvl < bestLevel or (lvl == bestLevel and itemID < best)))
 		elseif full then
 			better = lvl < bestLevel or (lvl == bestLevel and itemID < best)
 		else
@@ -279,6 +293,12 @@ end
 button:HookScript("OnMouseDown", function() icon:SetPoint("TOPLEFT", 1, -1) icon:SetPoint("BOTTOMRIGHT", 1, -1) end)
 button:HookScript("OnMouseUp", function() icon:SetPoint("TOPLEFT", 0, 0) icon:SetPoint("BOTTOMRIGHT", 0, 0) end)
 
+-- countdown swipe while Feed Pet is channelling
+local feedCooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+feedCooldown:SetAllPoints(icon)
+feedCooldown:SetDrawEdge(false)
+feedCooldown:SetReverse(true)
+
 -- gentle breathing pulse on the ring when the pet is not happy
 local pulse = border:CreateAnimationGroup()
 pulse:SetLooping("BOUNCE")
@@ -306,9 +326,23 @@ local lastHappiness
 local hadFood = nil      -- nil = unknown yet
 local lastAlert = 0
 
+-- Alert sounds offered in the menu. Only sounds that exist on this client are listed.
+local SOUND_CHOICES = {
+	{ "Raid warning", "RAID_WARNING" },
+	{ "Whisper ping", "TELL_MESSAGE" },
+	{ "Quest complete", "IG_QUEST_LIST_COMPLETE" },
+	{ "Quest open", "IG_QUEST_LIST_OPEN" },
+}
+
+local function PlayAlertSound()
+	local id = SOUNDKIT and (SOUNDKIT[S.soundChoice] or SOUNDKIT.RAID_WARNING)
+	if id then PlaySound(id) end
+end
+
+-- Returns true if the alert was actually shown (false when throttled).
 local function Alert(text)
 	local now = GetTime()
-	if now - lastAlert < S.throttle then return end
+	if now - lastAlert < S.throttle then return false end
 	lastAlert = now
 	if S.alertScreen then
 		if RaidNotice_AddMessage and RaidWarningFrame then
@@ -320,9 +354,8 @@ local function Alert(text)
 	if S.alertChat then
 		DEFAULT_CHAT_FRAME:AddMessage("|cffff3333" .. text .. "|r")
 	end
-	if S.alertSound and SOUNDKIT and SOUNDKIT.RAID_WARNING then
-		PlaySound(SOUNDKIT.RAID_WARNING)
-	end
+	if S.alertSound then PlayAlertSound() end
+	return true
 end
 
 -- Size and visibility driver are protected, so they wait for the end of combat.
@@ -369,6 +402,19 @@ local function ApplySecure(foodID)
 	end
 end
 
+-- Shows the remaining feed time while Feed Pet is channelling; clears it otherwise.
+local function UpdateFeeding()
+	local name, _, _, startMs, endMs = UnitChannelInfo("player")
+	if S.showFeeding and name and not IsSecret(name) and name == FeedPetName()
+		and startMs and endMs and not IsSecret(startMs) and not IsSecret(endMs) then
+		feedCooldown:SetCooldown(startMs / 1000, (endMs - startMs) / 1000)
+	else
+		feedCooldown:Clear()
+	end
+end
+
+local lowWarned = false -- already warned about low food since it was last above the threshold
+
 local function Refresh()
 	local foodID, foodCount, total = FindBestFood()
 	ApplySecure(foodID)
@@ -410,6 +456,14 @@ local function Refresh()
 			Alert("Kibble: your pet is hungry and you have no food it will eat!")
 		end
 		hadFood = hasFood
+		-- low-food warning: once per dip below the threshold (the "out of food" alert covers zero)
+		if S.lowFood > 0 and total > S.lowFood then
+			lowWarned = false
+		elseif S.lowFood > 0 and total > 0 and not lowWarned then
+			if Alert(("Kibble: low on pet food (%d left)!"):format(total)) then
+				lowWarned = true
+			end
+		end
 		if S.hungryHint and happiness and lastHappiness and happiness < lastHappiness
 			and happiness < 3 and hasFood then
 			Print("your pet is getting hungry - click Kibble.")
@@ -474,8 +528,10 @@ end)
 local SIZE_PRESETS = { { "Small", 32 }, { "Medium", 40 }, { "Large", 52 }, { "Extra large", 64 } }
 local OPACITY_PRESETS = { { "100%", 1 }, { "75%", 0.75 }, { "50%", 0.5 } }
 local THROTTLE_PRESETS = { { "15 seconds", 15 }, { "30 seconds", 30 }, { "60 seconds", 60 } }
+local LOW_FOOD_PRESETS = { { "Off", 0 }, { "5 or fewer", 5 }, { "10 or fewer", 10 }, { "20 or fewer", 20 } }
 local FOOD_MODES = {
 	{ "Save best food (cheapest that still fully feeds)", "save" },
+	{ "Smallest stack first (frees bag space)", "stack" },
 	{ "Always use the best food", "best" },
 }
 local VISIBILITY_MODES = {
@@ -525,6 +581,20 @@ local function BuildMenu(_, root)
 		{ "\"Pet is getting hungry\" hint", "hungryHint" },
 	})
 	alerts:CreateDivider()
+	alerts:CreateTitle("Warn when food is low")
+	AddRadios(alerts, LOW_FOOD_PRESETS, "lowFood")
+	alerts:CreateDivider()
+	alerts:CreateTitle("Alert sound (turn on with \"Sound\" above)")
+	for _, c in ipairs(SOUND_CHOICES) do
+		local label, key = c[1], c[2]
+		if SOUNDKIT and SOUNDKIT[key] then
+			alerts:CreateRadio(label, function() return S.soundChoice == key end, function()
+				S.soundChoice = key
+				PlayAlertSound() -- preview
+			end)
+		end
+	end
+	alerts:CreateDivider()
 	alerts:CreateTitle("Repeat alerts no more often than")
 	AddRadios(alerts, THROTTLE_PRESETS, "throttle")
 
@@ -538,6 +608,7 @@ local function BuildMenu(_, root)
 	AddChecks(look, {
 		{ "Show food count", "showCount" },
 		{ "Show \"NO FOOD\" text", "showNoFood" },
+		{ "Show feeding countdown", "showFeeding", function() UpdateFeeding() end },
 		{ "Lock position", "locked", function() end },
 	})
 	look:CreateButton("Reset position", function()
@@ -634,8 +705,11 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		QueueRefresh()
 	elseif event == "UNIT_PET" or event == "UNIT_LEVEL" then
 		wipe(canEatCache)
-		hadFood, lastHappiness = nil, nil
+		hadFood, lastHappiness, lowWarned = nil, nil, false
 		QueueRefresh()
+	elseif event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
+		or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+		UpdateFeeding()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if pendingLayout then ApplyLayout() end
 		if pendingSecure or pendingLayout then Refresh() end
@@ -652,6 +726,9 @@ SafeRegister("GET_ITEM_INFO_RECEIVED")
 SafeRegister("UNIT_PET", "player")
 SafeRegister("UNIT_LEVEL", "pet")
 SafeRegister("UNIT_HAPPINESS", "pet")
+SafeRegister("UNIT_SPELLCAST_CHANNEL_START", "player")
+SafeRegister("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+SafeRegister("UNIT_SPELLCAST_CHANNEL_UPDATE", "player")
 SafeRegister("UNIT_POWER_UPDATE", "pet") -- Forever exposes happiness as a pet power, too
 
 ---------------------------------------------------------------------------
