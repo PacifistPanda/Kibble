@@ -402,10 +402,10 @@ local function ApplySecure(foodID)
 	end
 end
 
--- Feed Pet is an ordinary cast: while the pet eats it carries a buff ("Feed Pet Effect" in
--- classic), so the countdown is read from that buff's duration. We match the classic spell ID
--- or any pet buff whose name starts with the Feed Pet spell name; /kibble buffs lists the
--- pet's buffs to confirm what the client really uses.
+-- Feed Pet is an ordinary cast: while the pet eats it carries a buff, so the countdown is read
+-- from that buff's duration. On WoW Forever it is "Feed Pet Effect", spell 1539, 20s (confirmed
+-- in-game with /kibble buffs). We match that spell ID, or any pet buff whose name starts with
+-- the Feed Pet spell name as a fallback.
 local FEED_BUFF_ID = 1539
 
 local function PetBuff(i)
