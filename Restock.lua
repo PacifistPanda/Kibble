@@ -179,16 +179,23 @@ local function CreateButton()
 	-- Right of the last Merchant / Buyback tab, on the same row: the tabs hang under the bottom-left
 	-- of the window, and skins (EllesmereUI) make the window wider than MerchantFrame itself, so a
 	-- corner anchor ends up behind them. Following the tab works for both. Fallback: bottom-right.
-	b:SetSize(200, 24)
+	-- With EllesmereUI's tab look the button takes the tabs' own height, so it reads as one more tab;
+	-- the stock UI keeps a normal 24px button centred on the row.
 	local lastTab
 	for i = 1, 8 do
 		local tab = _G["MerchantFrameTab" .. i]
 		if not tab then break end
 		lastTab = tab
 	end
-	if lastTab then
+	b:SetWidth(200)
+	if lastTab and ns.SkinActive and ns.SkinActive() then
+		b:SetPoint("TOPLEFT", lastTab, "TOPRIGHT", 2, 0)
+		b:SetPoint("BOTTOMLEFT", lastTab, "BOTTOMRIGHT", 2, 0)
+	elseif lastTab then
+		b:SetHeight(24)
 		b:SetPoint("LEFT", lastTab, "RIGHT", 8, 0)
 	else
+		b:SetHeight(24)
 		b:SetPoint("TOPRIGHT", MerchantFrame, "BOTTOMRIGHT", -10, 2)
 	end
 	b:SetScript("OnClick", function()
@@ -209,8 +216,6 @@ local function CreateButton()
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", GameTooltip_Hide)
-	ns.Skin("Button", b)
-	ns.Skin("StateButtonLabel", b) -- white when enabled, grey when disabled
 	return b
 end
 
@@ -236,6 +241,10 @@ function UpdateButton()
 		button:SetText((REASONS[plan.reason] or "Nothing to buy"):format(plan.have))
 		button:Disable()
 	end
+	-- EllesmereUI: the tab look mirrors the label, so restyle after every text change; the button
+	-- shows as the "active" tab while it can be clicked
+	ns.Skin("TabButton", button)
+	ns.Skin("TabState", button, button:IsEnabled())
 end
 
 ns.UpdateRestock = UpdateButton

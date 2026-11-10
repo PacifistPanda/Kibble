@@ -37,6 +37,7 @@ local function recorder()
     if k == "SetShown" then return function(_, v) st.shown = v end end
     if k == "Enable" then return function() st.enabled = true end end
     if k == "Disable" then return function() st.enabled = false end end
+    if k == "IsEnabled" then return function() return st.enabled end end
     if k == "SetScript" then return function(_, e, f) st.scripts[e] = f end end
     if k == "SetPoint" then return function(_, pt, rel, rp, x, y) st.point = { pt, rel, rp, x, y } end end
     if k == "CreateTexture" or k == "CreateFontString" then return function() return proxy() end end
@@ -122,7 +123,7 @@ Settings = { RegisterCanvasLayoutCategory = function(f, name) panelRegistered = 
 -- EllesmereUI skin registration + facade stub
 skinFn, skinName, skinCalls, Sstub = nil, nil, {}, {}
 EllesmereUI = { RegisterSkin = function(name, fn) skinName = name; skinFn = fn end }
-for _, k in ipairs{ "Button", "StateButtonLabel", "Checkbox" } do Sstub[k] = function(w) skinCalls[#skinCalls + 1] = { k, w } end end
+for _, k in ipairs{ "Button", "StateButtonLabel", "Checkbox", "Tab", "SetTabSelection" } do Sstub[k] = function(w, a) skinCalls[#skinCalls + 1] = { k, w, a } end end
 GameTooltip = proxy(); GameTooltip_Hide = function() end; SlashCmdList = {}; IsShiftKeyDown = function() return false end
 -- menu recorder
 local function node(label, tree) local n = { label = label, kids = {} }
@@ -394,16 +395,35 @@ assert(skinName == "Kibble" and type(skinFn) == "function", "registered with Ell
 assert(#skinCalls == 0, "nothing is skinned before EllesmereUI hands over its facade")
 skinFn(Sstub)
 local function skinCount(kind) local n = 0 for _, c in ipairs(skinCalls) do if c[1] == kind then n = n + 1 end end return n end
-assert(skinCount("Button") == 2 and skinCount("StateButtonLabel") == 1 and skinCount("Checkbox") == 10,
-  ("queued widgets skinned (Button %d, label %d, Checkbox %d)"):format(skinCount("Button"), skinCount("StateButtonLabel"), skinCount("Checkbox")))
-local sawRestock = false for _, c in ipairs(skinCalls) do if c[2] == rbtn and c[1] == "Button" then sawRestock = true end end
-assert(sawRestock, "the vendor restock button is skinned")
+assert(skinCount("Tab") == 1 and skinCount("Button") == 1 and skinCount("Checkbox") == 10 and skinCount("StateButtonLabel") == 0,
+  ("queued widgets skinned once each (Tab %d, Button %d, Checkbox %d)"):format(skinCount("Tab"), skinCount("Button"), skinCount("Checkbox")))
+local sawTab = false for _, c in ipairs(skinCalls) do if c[2] == rbtn and c[1] == "Tab" then sawTab = true end end
+assert(sawTab, "the vendor restock button gets the window's tab look")
+local function lastSel() for i = #skinCalls, 1, -1 do local c = skinCalls[i]; if c[1] == "SetTabSelection" and c[2] == rbtn then return c[3] end end end
+assert(lastSel() ~= nil, "its active/inactive look is set")
+local tabsBefore = skinCount("Tab")
+money = 1; rev(nil, "MERCHANT_UPDATE")
+assert(lastSel() == false and skinCount("Tab") == tabsBefore + 1, "disabled -> inactive tab look, label re-mirrored")
+money = 100000; rev(nil, "MERCHANT_UPDATE"); assert(lastSel() == true, "clickable -> active tab look")
+assert(ns.SkinActive() == true, "tab look reported active")
+-- older EllesmereUI without S.Tab: falls back to a plain button + state label
+local old = { Button = Sstub.Button, StateButtonLabel = Sstub.StateButtonLabel }; local savedSkin = ns.skin; ns.skin = old
+local b0, l0, t0 = skinCount("Button"), skinCount("StateButtonLabel"), skinCount("Tab")
+ns.Skin("TabButton", {}); assert(skinCount("Button") == b0 + 1 and skinCount("StateButtonLabel") == l0 + 1 and skinCount("Tab") == t0, "fallback without S.Tab")
+assert(ns.SkinActive() == false); ns.Skin("TabState", {}, true)   -- no SetTabSelection: ignored
+ns.skin = savedSkin
 local nCalls = #skinCalls; ns.Skin("Button", {}); assert(#skinCalls == nCalls + 1, "widgets made later are skinned at once")
 ns.Skin("DoesNotExist", {})                                   -- a primitive an older EllesmereUI lacks is ignored
 Sstub.Button = function() error("boom") end; ns.Skin("Button", {})  -- and a failing skin never throws
 local savedEUI = EllesmereUI; EllesmereUI = nil
 local ns2 = { core = ns.core }; assert(loadfile(dir .. "/Panel.lua"))("Kibble", ns2); ns2.Skin("Button", {})
 EllesmereUI = savedEUI
+-- with the tab look active, a freshly made button takes the tab row's height (top+bottom anchored to the tab)
+local n0 = #frames
+local ns3 = { core = ns.core, Skin = function() end, SkinActive = function() return true end }
+assert(loadfile(dir .. "/Restock.lua"))("Kibble", ns3)
+frames[n0 + 1].st["script:OnEvent"](nil, "MERCHANT_SHOW")
+assert(rst.point[1] == "BOTTOMLEFT" and rst.point[2] == MerchantFrameTab2 and rst.point[3] == "BOTTOMRIGHT", "tab-look button matches the tab row height")
 print("EllesmereUI skin OK")
 
 -- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)

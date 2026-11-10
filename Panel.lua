@@ -46,14 +46,50 @@ local atan2 = math.atan2 or math.atan
 
 local skinQueue = {}
 
-function ns.Skin(kind, widget)
+-- Higher-level skins built from the facade's primitives, with fallbacks for older EllesmereUI:
+--   TabButton  a button styled as one of the window's own tabs (S.Tab); re-call after SetText to
+--              re-mirror its label. Falls back to S.Button + S.StateButtonLabel.
+--   TabState   shows it as the active tab (bright label + accent underline) or not; arg = boolean.
+local COMPOSITE = {
+	TabButton = function(S, w)
+		if S.Tab then
+			S.Tab(w)
+		elseif S.Button then
+			S.Button(w)
+			if S.StateButtonLabel then S.StateButtonLabel(w) end
+		end
+	end,
+	TabState = function(S, w, active)
+		if S.SetTabSelection then S.SetTabSelection(w, active and true or false) end
+	end,
+}
+
+local function RunSkin(S, kind, widget, arg)
+	local composite = COMPOSITE[kind]
+	if composite then
+		pcall(composite, S, widget, arg)
+	elseif S[kind] then
+		pcall(S[kind], widget, arg)
+	end
+end
+
+function ns.Skin(kind, widget, arg)
 	if not (EllesmereUI and EllesmereUI.RegisterSkin) then return end
 	local S = ns.skin
 	if S then
-		if S[kind] then pcall(S[kind], widget) end
-	else
-		skinQueue[#skinQueue + 1] = { kind, widget }
+		RunSkin(S, kind, widget, arg)
+		return
 	end
+	for _, q in ipairs(skinQueue) do -- not yet handed the facade: keep one entry per widget+kind
+		if q[1] == kind and q[2] == widget then q[3] = arg; return end
+	end
+	skinQueue[#skinQueue + 1] = { kind, widget, arg }
+end
+
+-- true when EllesmereUI is styling our widgets with its tab look (the restock button then matches
+-- the tab row's height instead of using the stock button size)
+function ns.SkinActive()
+	return ns.skin ~= nil and ns.skin.Tab ~= nil
 end
 
 if EllesmereUI and EllesmereUI.RegisterSkin then
@@ -61,9 +97,7 @@ if EllesmereUI and EllesmereUI.RegisterSkin then
 		ns.skin = S
 		local queued = skinQueue
 		skinQueue = {}
-		for _, q in ipairs(queued) do
-			if S[q[1]] then pcall(S[q[1]], q[2]) end
-		end
+		for _, q in ipairs(queued) do RunSkin(S, q[1], q[2], q[3]) end
 	end)
 end
 
