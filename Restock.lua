@@ -176,8 +176,10 @@ local REASONS = {
 
 local function CreateButton()
 	local b = CreateFrame("Button", "KibbleRestockButton", MerchantFrame, "UIPanelButtonTemplate")
-	b:SetSize(230, 24)
-	b:SetPoint("TOPLEFT", MerchantFrame, "BOTTOMLEFT", 10, 2)
+	-- Under the window's bottom-right corner: the Merchant / Buyback tabs sit under the bottom-left,
+	-- so a left-anchored button would be hidden behind them. 200 wide keeps clear of the tabs.
+	b:SetSize(200, 24)
+	b:SetPoint("TOPRIGHT", MerchantFrame, "BOTTOMRIGHT", -10, 2)
 	b:SetScript("OnClick", function()
 		if job then return end
 		local plan = Plan()

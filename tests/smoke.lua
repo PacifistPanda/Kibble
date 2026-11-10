@@ -303,6 +303,7 @@ merchant = {
 reset_food{ [1] = { 11, 3 } }; money = 100000; bought = {}; pending = {}; KibbleDB.settings.restockTarget = 40
 rev(nil, "MERCHANT_SHOW")
 assert(rst.shown and rst.enabled and rst.text == "Restock pet food (buy 40)", "restock button offered: "..tostring(rst.text))
+assert(rst.point[1] == "TOPRIGHT" and rst.point[3] == "BOTTOMRIGHT", "button sits under the bottom-right corner, clear of the Merchant/Buyback tabs")
 assert(#bought == 0, "nothing is bought until the button is clicked")
 rst.scripts.OnClick()
 assert(#bought == 1 and bought[1] == 20, "first purchase is capped at the per-purchase maximum")
