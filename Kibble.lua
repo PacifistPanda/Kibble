@@ -37,7 +37,7 @@ local DEFAULTS = {
 	soundChoice = "RAID_WARNING", -- key into SOUNDKIT, see SOUND_CHOICES
 	hungryHint  = true,    -- "your pet is getting hungry" chat hint
 	lowFood     = 0,       -- warn once when edible food drops to this many or fewer (0 = off)
-	showFeeding = true,    -- countdown swipe on the button while Feed Pet is channelling
+	showFeeding = true,    -- countdown swipe on the button while the pet is feeding
 	throttle    = 30,      -- seconds between repeated alerts
 	size        = 40,
 	opacity     = 1,
@@ -293,7 +293,7 @@ end
 button:HookScript("OnMouseDown", function() icon:SetPoint("TOPLEFT", 1, -1) icon:SetPoint("BOTTOMRIGHT", 1, -1) end)
 button:HookScript("OnMouseUp", function() icon:SetPoint("TOPLEFT", 0, 0) icon:SetPoint("BOTTOMRIGHT", 0, 0) end)
 
--- countdown swipe while Feed Pet is channelling
+-- countdown swipe while the pet is feeding (driven by its Feed Pet buff, see UpdateFeeding)
 local feedCooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
 feedCooldown:SetAllPoints(icon)
 feedCooldown:SetDrawEdge(false)
@@ -402,12 +402,37 @@ local function ApplySecure(foodID)
 	end
 end
 
--- Shows the remaining feed time while Feed Pet is channelling; clears it otherwise.
+-- Feed Pet is an ordinary cast: while the pet eats it carries a buff ("Feed Pet Effect" in
+-- classic), so the countdown is read from that buff's duration. We match the classic spell ID
+-- or any pet buff whose name starts with the Feed Pet spell name; /kibble buffs lists the
+-- pet's buffs to confirm what the client really uses.
+local FEED_BUFF_ID = 1539
+
+local function PetBuff(i)
+	if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+	return C_UnitAuras.GetAuraDataByIndex("pet", i, "HELPFUL")
+end
+
+local function FindFeedBuff()
+	local prefix = FeedPetName()
+	for i = 1, 40 do
+		local aura = PetBuff(i)
+		if not aura then return nil end
+		local name, id = aura.name, aura.spellId
+		if not IsSecret(name) and not IsSecret(id) and not IsSecret(aura.duration)
+			and not IsSecret(aura.expirationTime) then
+			if id == FEED_BUFF_ID or (type(name) == "string" and name:find(prefix, 1, true) == 1) then
+				return aura
+			end
+		end
+	end
+end
+
+-- Shows the remaining feed time while the pet is eating; clears it otherwise.
 local function UpdateFeeding()
-	local name, _, _, startMs, endMs = UnitChannelInfo("player")
-	if S.showFeeding and name and not IsSecret(name) and name == FeedPetName()
-		and startMs and endMs and not IsSecret(startMs) and not IsSecret(endMs) then
-		feedCooldown:SetCooldown(startMs / 1000, (endMs - startMs) / 1000)
+	local aura = S.showFeeding and PetIsOut() and FindFeedBuff()
+	if aura and aura.duration and aura.duration > 0 and aura.expirationTime then
+		feedCooldown:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
 	else
 		feedCooldown:Clear()
 	end
@@ -707,8 +732,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		wipe(canEatCache)
 		hadFood, lastHappiness, lowWarned = nil, nil, false
 		QueueRefresh()
-	elseif event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
-		or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+	elseif event == "UNIT_AURA" then
 		UpdateFeeding()
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if pendingLayout then ApplyLayout() end
@@ -726,9 +750,7 @@ SafeRegister("GET_ITEM_INFO_RECEIVED")
 SafeRegister("UNIT_PET", "player")
 SafeRegister("UNIT_LEVEL", "pet")
 SafeRegister("UNIT_HAPPINESS", "pet")
-SafeRegister("UNIT_SPELLCAST_CHANNEL_START", "player")
-SafeRegister("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-SafeRegister("UNIT_SPELLCAST_CHANNEL_UPDATE", "player")
+SafeRegister("UNIT_AURA", "pet") -- the feeding buff drives the countdown
 SafeRegister("UNIT_POWER_UPDATE", "pet") -- Forever exposes happiness as a pet power, too
 
 ---------------------------------------------------------------------------
@@ -740,6 +762,20 @@ SlashCmdList.KIBBLE = function(msg)
 	msg = (msg or ""):lower()
 	if msg == "config" or msg == "options" or msg == "settings" then
 		OpenMenu()
+	elseif msg == "buffs" then
+		-- diagnostic: feed your pet, then run this to see what the feeding buff is called
+		local any = false
+		for i = 1, 40 do
+			local a = PetBuff(i)
+			if not a then break end
+			any = true
+			if IsSecret(a.name) then
+				Print(i .. ": (restricted in combat)")
+			else
+				Print(("%d: %s (spell %s, %ss)"):format(i, tostring(a.name), tostring(a.spellId), tostring(a.duration)))
+			end
+		end
+		if not any then Print("your pet has no buffs (or no pet is out).") end
 	elseif msg == "reset" then
 		if InCombatLockdown() then Print("can't move the button in combat.") return end
 		KibbleDB.pos = nil

@@ -14,7 +14,7 @@ Kibble warns you when you have no food your pet will eat.
   the cheapest food that still fully feeds your pet, and the highest level food otherwise.
 - **Mood ring.** Green, yellow or red around the button, pulsing when the pet is not happy.
 - **No-food and low-food warnings.** On-screen message and chat line, rate limited. Optionally warn when you're down to 5, 10 or 20 foods, and play a sound (off by default; pick from four).
-- **Feeding countdown.** A swipe on the button while Feed Pet is channelling.
+- **Feeding countdown.** A swipe on the button while your pet is eating, driven by the pet's feeding buff.
 - **Right-click settings menu**
   - *Alerts:* on-screen / chat / sound (opt-in) / "getting hungry" hint, a low-food threshold, the alert sound, and how often alerts may repeat.
   - *Appearance:* size and opacity presets, lock position, show the food count, "NO FOOD" text and feeding countdown, reset position.
@@ -36,6 +36,7 @@ Download the latest `Kibble.zip` from [Releases](../../releases) and unzip it so
 | Shift-drag | Move the button (unless locked) |
 | `/kibble` | Print pet mood and the food Kibble would pick |
 | `/kibble config` | Open the settings menu (works even when the button is hidden) |
+| `/kibble buffs` | List your pet's buffs (diagnostic: shows what the feeding buff is called on your client) |
 | `/kibble reset` | Put the button back in its default spot |
 
 Bind a key under **Options > Key Bindings > AddOns > Kibble**.

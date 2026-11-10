@@ -60,7 +60,7 @@ MenuUtil = { CreateContextMenu = function(_, build) menuRoot = node("root"); bui
 RaidNotice_AddMessage = nil; shown = {}; UIErrorsFrame = { AddMessage = function(_, m) shown[#shown+1] = m; print("SCREEN", m) end }; ChatTypeInfo = {}
 played = {}; PlaySound = function(id) played[#played+1] = id end
 SOUNDKIT = { RAID_WARNING = 1, TELL_MESSAGE = 2, IG_QUEST_LIST_COMPLETE = 3, IG_QUEST_LIST_OPEN = 4 }
-channel = nil; UnitChannelInfo = function() if channel then return unpack(channel) end end
+petAuras = {}; C_UnitAuras = { GetAuraDataByIndex = function(unit, i, filter) assert(unit == "pet" and filter == "HELPFUL"); return petAuras[i] end }
 
 local chunk = assert(loadfile(path)); chunk("Kibble")
 FeedMeDB = { pos = { "TOP", "TOP", 7, 9 } }; KibbleDB = nil   -- pre-rename saved data
@@ -157,14 +157,25 @@ reset_food{ [1] = { 10, 1 }, [2] = { 12, 9 } }; ev(nil, "UNIT_PET", "player"); a
 find(food, "Save best food (cheapest that still fully feeds)").set()
 print("smallest-stack mode OK")
 
--- feeding countdown
+-- feeding countdown: Feed Pet is a plain cast; the pet carries a buff while it eats
 local look2 = find(menuRoot, "Appearance")
-channel = { "Feed Pet", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player")
-assert(cd.last and cd.last[1] == 5 and cd.last[2] == 10, "countdown started")
-channel = nil; ev(nil, "UNIT_SPELLCAST_CHANNEL_STOP", "player"); assert(cd.last == nil, "countdown cleared")
-channel = { "Other Spell", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player"); assert(cd.last == nil, "ignores other channels")
-find(look2, "Show feeding countdown").set(); channel = { "Feed Pet", nil, nil, 5000, 15000 }; ev(nil, "UNIT_SPELLCAST_CHANNEL_START", "player")
-assert(cd.last == nil, "countdown can be turned off"); find(look2, "Show feeding countdown").set()
+petAuras = {}
+petAuras[1] = { name = "Mark of the Wild", spellId = 1126, duration = 3600, expirationTime = clock + 3000 }
+ev(nil, "UNIT_AURA", "pet"); assert(cd.last == nil, "unrelated buffs do not start the countdown")
+petAuras[2] = { name = "Feed Pet Effect", spellId = 1539, duration = 10, expirationTime = clock + 10 }
+ev(nil, "UNIT_AURA", "pet"); assert(cd.last and cd.last[1] == clock and cd.last[2] == 10, "countdown starts from the buff (by spell id)")
+petAuras[2] = nil; ev(nil, "UNIT_AURA", "pet"); assert(cd.last == nil, "countdown clears when the buff ends")
+petAuras[2] = { name = "Nom Nom", spellId = 1539, duration = 6, expirationTime = clock + 6 }
+ev(nil, "UNIT_AURA", "pet"); assert(cd.last and cd.last[2] == 6, "matches by spell id even if the name differs")
+petAuras[2] = { name = "Feed Pet Effect", spellId = 99999, duration = 8, expirationTime = clock + 8 }
+ev(nil, "UNIT_AURA", "pet"); assert(cd.last and cd.last[2] == 8, "also matches by name when the spell id differs")
+petAuras[2] = { name = "SECRET", spellId = 1539, duration = 8, expirationTime = clock + 8 }; issecretvalue = function(v) return v == "SECRET" end
+ev(nil, "UNIT_AURA", "pet"); assert(cd.last == nil, "restricted (secret) auras are skipped, not compared")
+issecretvalue = nil
+petAuras[2] = { name = "Feed Pet Effect", spellId = 1539, duration = 10, expirationTime = clock + 10 }
+find(look2, "Show feeding countdown").set(); ev(nil, "UNIT_AURA", "pet"); assert(cd.last == nil, "countdown can be turned off")
+find(look2, "Show feeding countdown").set(); ev(nil, "UNIT_AURA", "pet"); assert(cd.last, "and back on")
+petAuras = {}; ev(nil, "UNIT_AURA", "pet")
 print("feeding countdown OK")
 
 -- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)
@@ -176,5 +187,10 @@ KibbleDB.settings.alertSound = true; c2("Kibble"); handlers.events["script:OnEve
 assert(KibbleDB.settings.alertSound == true, "a deliberate opt-in survives later loads")
 print("sound migration OK")
 
-print("slash:"); SlashCmdList.KIBBLE("config"); assert(menuRoot); SlashCmdList.KIBBLE("")
+print("slash:")
+local chat = {}; DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) chat[#chat+1] = m end }
+SlashCmdList.KIBBLE("buffs"); assert(chat[#chat]:find("no buffs"), "buffs: empty list message")
+petAuras[1] = { name = "Feed Pet Effect", spellId = 1539, duration = 10 }; SlashCmdList.KIBBLE("buffs")
+assert(chat[#chat]:find("Feed Pet Effect") and chat[#chat]:find("1539"), "buffs: lists name and spell id")
+SlashCmdList.KIBBLE("config"); assert(menuRoot); SlashCmdList.KIBBLE("")
 print("ALL OK")
