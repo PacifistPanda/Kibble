@@ -176,10 +176,21 @@ local REASONS = {
 
 local function CreateButton()
 	local b = CreateFrame("Button", "KibbleRestockButton", MerchantFrame, "UIPanelButtonTemplate")
-	-- Under the window's bottom-right corner: the Merchant / Buyback tabs sit under the bottom-left,
-	-- so a left-anchored button would be hidden behind them. 200 wide keeps clear of the tabs.
+	-- Right of the last Merchant / Buyback tab, on the same row: the tabs hang under the bottom-left
+	-- of the window, and skins (EllesmereUI) make the window wider than MerchantFrame itself, so a
+	-- corner anchor ends up behind them. Following the tab works for both. Fallback: bottom-right.
 	b:SetSize(200, 24)
-	b:SetPoint("TOPRIGHT", MerchantFrame, "BOTTOMRIGHT", -10, 2)
+	local lastTab
+	for i = 1, 8 do
+		local tab = _G["MerchantFrameTab" .. i]
+		if not tab then break end
+		lastTab = tab
+	end
+	if lastTab then
+		b:SetPoint("LEFT", lastTab, "RIGHT", 8, 0)
+	else
+		b:SetPoint("TOPRIGHT", MerchantFrame, "BOTTOMRIGHT", -10, 2)
+	end
 	b:SetScript("OnClick", function()
 		if job then return end
 		local plan = Plan()

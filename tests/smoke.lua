@@ -94,6 +94,7 @@ STANDARD_TEXT_FONT = "x"; NUM_BAG_SLOTS = 4; wipe = function(t) for k in pairs(t
 -- vendor, minimap and options-panel stubs
 merchant = {}; money = 100000; bought = {}
 MerchantFrame = { IsShown = function() return true end, selectedTab = 1 }
+MerchantFrameTab1, MerchantFrameTab2 = { name = "tab1" }, { name = "tab2" }
 GetMerchantNumItems = function() return #merchant end
 GetMerchantItemID = function(i) return merchant[i] and merchant[i].id end
 GetMerchantItemMaxStack = function(i) return merchant[i].maxStack end
@@ -303,7 +304,7 @@ merchant = {
 reset_food{ [1] = { 11, 3 } }; money = 100000; bought = {}; pending = {}; KibbleDB.settings.restockTarget = 40
 rev(nil, "MERCHANT_SHOW")
 assert(rst.shown and rst.enabled and rst.text == "Restock pet food (buy 40)", "restock button offered: "..tostring(rst.text))
-assert(rst.point[1] == "TOPRIGHT" and rst.point[3] == "BOTTOMRIGHT", "button sits under the bottom-right corner, clear of the Merchant/Buyback tabs")
+assert(rst.point[1] == "LEFT" and rst.point[2] == MerchantFrameTab2 and rst.point[3] == "RIGHT", "button follows the last Merchant/Buyback tab, so no skin can cover it")
 assert(#bought == 0, "nothing is bought until the button is clicked")
 rst.scripts.OnClick()
 assert(#bought == 1 and bought[1] == 20, "first purchase is capped at the per-purchase maximum")
