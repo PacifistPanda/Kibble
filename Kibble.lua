@@ -13,8 +13,12 @@
 --     (it catches up as soon as combat ends).
 --   * Some values may be "secret" in combat; those are never compared, only skipped.
 
-local ADDON = ...
+local ADDON, ns = ...
+ns = ns or {}                     -- shared with Restock.lua / Panel.lua (see ns.core at the bottom)
 local FEED_PET_SPELL_ID = 6991
+local CALL_PET_SPELL_ID = 883
+local REVIVE_PET_SPELL_ID = 982
+local MEND_PET_SPELL_ID = 136
 local FULL_GAIN_LEVEL_GAP = 5     -- food up to 5 levels below the pet gives full happiness
 local BASE_SIZE = 40              -- reference size the fonts are scaled from
 local FADED_ALPHA = 0.15          -- "only when pet isn't happy" mode: alpha while the pet is happy
@@ -47,6 +51,10 @@ local DEFAULTS = {
 	foodMode    = "save",  -- "save" = cheapest food that still gives full happiness; "best" = highest level;
 	                       -- "stack" = smallest stack among the foods that still give full happiness
 	visibility  = "always", -- "always" | "unhappy" (fades while happy) | "hidden"
+	petCare     = true,    -- the button also revives a dead pet / calls a missing one (Ctrl-click mends)
+	restockTarget = 40,    -- vendor restock: buy up to this many of the chosen food
+	showMinimap = true,    -- minimap button
+	minimapAngle = 3.93,   -- radians around the minimap (225 degrees = bottom left)
 }
 
 local S = {}
@@ -81,22 +89,32 @@ local function Print(msg)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Kibble:|r " .. msg)
 end
 
-local function FeedPetName()
+local function SpellName(id, fallback)
 	if C_Spell and C_Spell.GetSpellName then
-		return C_Spell.GetSpellName(FEED_PET_SPELL_ID) or "Feed Pet"
+		return C_Spell.GetSpellName(id) or fallback
 	end
-	return (GetSpellInfo and GetSpellInfo(FEED_PET_SPELL_ID)) or "Feed Pet"
+	return (GetSpellInfo and GetSpellInfo(id)) or fallback
 end
 
-local function FeedPetIcon()
+local function SpellIcon(id, fallback)
 	if C_Spell and C_Spell.GetSpellTexture then
-		return C_Spell.GetSpellTexture(FEED_PET_SPELL_ID)
+		return C_Spell.GetSpellTexture(id) or fallback
 	end
-	return 132165
+	return fallback
 end
+
+local function FeedPetName() return SpellName(FEED_PET_SPELL_ID, "Feed Pet") end
+local function FeedPetIcon() return SpellIcon(FEED_PET_SPELL_ID, 132165) end
 
 local function PetIsOut()
 	return UnitExists("pet") and not UnitIsDead("pet")
+end
+
+-- "out" = living pet, "dead" = pet unit exists but is dead, "none" = no pet unit
+local function PetState()
+	if not UnitExists("pet") then return "none" end
+	if UnitIsDead("pet") then return "dead" end
+	return "out"
 end
 
 -- 1 = unhappy (red), 2 = content (yellow), 3 = happy (green); nil if unknown/restricted
@@ -169,11 +187,10 @@ local function ScanFood(includeIgnored)
 	return counts
 end
 
--- Returns bestItemID, countOfThatItem, totalEdibleCount
-local function FindBestFood()
-	if not PetIsOut() then return nil, 0, 0 end
+-- Picks the food to use from { [itemID] = count }; returns itemID, totalCount. Also used by
+-- vendor restock (Restock.lua) to pick which of a vendor's foods to buy.
+local function ChooseFood(counts)
 	local petLevel = GetPetLevel()
-	local counts = ScanFood(false)
 
 	-- rank ("save" mode): food that gives full happiness first (lowest level of those, to save
 	-- better food); otherwise the highest-level food available. "stack" mode is the same but picks
@@ -202,6 +219,14 @@ local function FindBestFood()
 		end
 	end
 
+	return best, total
+end
+
+-- Returns bestItemID, countOfThatItem, totalEdibleCount
+local function FindBestFood()
+	if not PetIsOut() then return nil, 0, 0 end
+	local counts = ScanFood(false)
+	local best, total = ChooseFood(counts)
 	return best, best and counts[best] or 0, total
 end
 
@@ -369,7 +394,13 @@ local function ApplyLayout()
 	button:SetSize(size, size)
 	count:SetFont(STANDARD_TEXT_FONT, math.floor(12 * size / BASE_SIZE + 0.5), "OUTLINE")
 	noFood:SetFont(STANDARD_TEXT_FONT, math.floor(10 * size / BASE_SIZE + 0.5), "OUTLINE")
-	local expr = S.visibility == "hidden" and "hide" or "[@pet,exists,nodead] show; hide"
+	-- pet care: stay visible with a dead/missing pet so the button can revive / call it
+	local expr = "[@pet,exists,nodead] show; hide"
+	if S.visibility == "hidden" then
+		expr = "hide"
+	elseif S.petCare then
+		expr = "show"
+	end
 	if expr ~= appliedDriver then
 		appliedDriver = expr
 		RegisterStateDriver(button, "visibility", expr)
@@ -380,11 +411,38 @@ end
 -- the pet is happy (or its mood is unknown).
 local function UpdateAlpha(happiness)
 	local alpha = S.opacity
-	if S.visibility == "unhappy" and (happiness == nil or happiness >= 3) then
+	-- never fade it while it is offering to revive / call the pet
+	if S.visibility == "unhappy" and PetIsOut() and (happiness == nil or happiness >= 3) then
 		alpha = alpha * FADED_ALPHA
 	end
 	button:SetAlpha(alpha)
 end
+
+-- The click macro. With pet care on, the conditionals pick the action when you click, so it keeps
+-- working through combat: revive a dead pet, call a missing one, Ctrl-click mends, otherwise feed.
+local function BuildMacro(foodID)
+	if not S.petCare then
+		if foodID then
+			return "/cast " .. FeedPetName() .. "\n/use item:" .. foodID
+		end
+		return "" -- no food: clicking just reports it
+	end
+	local casts = {
+		"[@pet,dead] " .. SpellName(REVIVE_PET_SPELL_ID, "Revive Pet"),
+		"[nopet] " .. SpellName(CALL_PET_SPELL_ID, "Call Pet"),
+		"[@pet,exists,nodead,mod:ctrl] " .. SpellName(MEND_PET_SPELL_ID, "Mend Pet"),
+	}
+	local text
+	if foodID then
+		casts[#casts + 1] = "[@pet,exists,nodead] " .. FeedPetName()
+		text = "/cast " .. table.concat(casts, "; ") .. "\n/use [@pet,exists,nodead,nomod:ctrl] item:" .. foodID
+	else
+		text = "/cast " .. table.concat(casts, "; ")
+	end
+	return text
+end
+
+local appliedMacroKey
 
 local function ApplySecure(foodID)
 	if InCombatLockdown() then
@@ -392,14 +450,12 @@ local function ApplySecure(foodID)
 		return
 	end
 	pendingSecure = false
-	if foodID == currentFood and button:GetAttribute("macrotext") then return end
+	-- the macro depends on the food and on the pet-care setting
+	local key = (foodID or "none") .. (S.petCare and "+care" or "")
+	if key == appliedMacroKey and button:GetAttribute("macrotext") then return end
+	appliedMacroKey = key
 	currentFood = foodID
-	if foodID then
-		button:SetAttribute("macrotext", "/cast " .. FeedPetName() .. "\n/use item:" .. foodID)
-	else
-		-- no food: clicking just reports it
-		button:SetAttribute("macrotext", "")
-	end
+	button:SetAttribute("macrotext", BuildMacro(foodID))
 end
 
 -- Feed Pet is an ordinary cast: while the pet eats it carries a buff, so the countdown is read
@@ -439,10 +495,29 @@ local function UpdateFeeding()
 end
 
 local lowWarned = false -- already warned about low food since it was last above the threshold
+local lastPetState        -- "out" / "dead" / "none", to notice the pet dying or coming back
 
 local function Refresh()
 	local foodID, foodCount, total = FindBestFood()
 	ApplySecure(foodID)
+
+	local state = PetState()
+	lastPetState = state
+	if S.petCare and state ~= "out" then
+		-- no living pet: the button offers to revive it (dead) or call it (missing)
+		local spell = state == "dead" and REVIVE_PET_SPELL_ID or CALL_PET_SPELL_ID
+		icon:SetTexture(SpellIcon(spell, FeedPetIcon()))
+		icon:SetDesaturated(false)
+		count:SetText("")
+		noFood:Hide()
+		shade:Hide()
+		feedCooldown:Clear()
+		pulse:Stop()
+		border:SetAlpha(1)
+		border:SetColorTexture(0.55, 0.55, 0.62, 1)
+		UpdateAlpha(nil)
+		return
+	end
 
 	-- visuals (safe in combat)
 	local shownFood = currentFood or foodID
@@ -527,6 +602,15 @@ local HAPPY_TEXT = { [1] = "|cffff2020Unhappy|r", [2] = "|cffffd800Content|r", [
 
 button:SetScript("OnEnter", function(self)
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+	local state = PetState()
+	if S.petCare and state ~= "out" then
+		GameTooltip:SetText("Kibble")
+		GameTooltip:AddLine(state == "dead" and "Click to revive your pet." or "Click to call your pet.", 1, 1, 1)
+		GameTooltip:AddLine("Right-click for settings." .. (S.locked and "" or " Shift-drag to move."), 0.7, 0.7, 0.7)
+		GameTooltip:Show()
+		button:SetAlpha(S.opacity)
+		return
+	end
 	if currentFood then
 		GameTooltip:SetItemByID(currentFood)
 	else
@@ -536,8 +620,8 @@ button:SetScript("OnEnter", function(self)
 	local h = GetHappiness()
 	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine("Pet: " .. (HAPPY_TEXT[h] or "unknown"))
-	GameTooltip:AddLine("Click to feed. Right-click for settings." ..
-		(S.locked and "" or " Shift-drag to move."), 0.7, 0.7, 0.7)
+	GameTooltip:AddLine("Click to feed." .. (S.petCare and " Ctrl-click to mend." or "") ..
+		" Right-click for settings." .. (S.locked and "" or " Shift-drag to move."), 0.7, 0.7, 0.7)
 	GameTooltip:Show()
 	button:SetAlpha(S.opacity) -- un-fade while hovered so the faded button is easy to find
 end)
@@ -554,6 +638,7 @@ local SIZE_PRESETS = { { "Small", 32 }, { "Medium", 40 }, { "Large", 52 }, { "Ex
 local OPACITY_PRESETS = { { "100%", 1 }, { "75%", 0.75 }, { "50%", 0.5 } }
 local THROTTLE_PRESETS = { { "15 seconds", 15 }, { "30 seconds", 30 }, { "60 seconds", 60 } }
 local LOW_FOOD_PRESETS = { { "Off", 0 }, { "5 or fewer", 5 }, { "10 or fewer", 10 }, { "20 or fewer", 20 } }
+local RESTOCK_TARGETS = { 20, 40, 80, 120 }
 local FOOD_MODES = {
 	{ "Save best food (cheapest that still fully feeds)", "save" },
 	{ "Smallest stack first (frees bag space)", "stack" },
@@ -635,6 +720,7 @@ local function BuildMenu(_, root)
 		{ "Show \"NO FOOD\" text", "showNoFood" },
 		{ "Show feeding countdown", "showFeeding", function() UpdateFeeding() end },
 		{ "Lock position", "locked", function() end },
+		{ "Show minimap button", "showMinimap", function() if ns.UpdateMinimap then ns.UpdateMinimap() end end },
 	})
 	look:CreateButton("Reset position", function()
 		if InCombatLockdown() then
@@ -648,6 +734,14 @@ local function BuildMenu(_, root)
 	local food = root:CreateButton("Food")
 	food:CreateTitle("Which food to use")
 	AddRadios(food, FOOD_MODES, "foodMode")
+	food:CreateDivider()
+	food:CreateTitle("Vendor restock: buy up to")
+	for _, n in ipairs(RESTOCK_TARGETS) do
+		food:CreateRadio(tostring(n), function() return S.restockTarget == n end, function()
+			S.restockTarget = n
+			if ns.UpdateRestock then ns.UpdateRestock() end
+		end)
+	end
 	food:CreateDivider()
 	local ignore = food:CreateButton("Ignored foods")
 	if not PetIsOut() then
@@ -671,6 +765,10 @@ local function BuildMenu(_, root)
 
 	local vis = root:CreateButton("Visibility")
 	AddRadios(vis, VISIBILITY_MODES, "visibility")
+	vis:CreateDivider()
+	AddChecks(vis, {
+		{ "Revive / call a missing pet (Ctrl-click mends)", "petCare", Apply },
+	})
 end
 
 local function OpenMenu()
@@ -681,7 +779,7 @@ local lastNoFoodMsg = 0
 button:HookScript("OnClick", function(_, mouseButton, down)
 	if mouseButton == "RightButton" then
 		if not down then OpenMenu() end
-	elseif not currentFood and GetTime() - lastNoFoodMsg > 1 then
+	elseif PetIsOut() and not currentFood and not IsControlKeyDown() and GetTime() - lastNoFoodMsg > 1 then
 		lastNoFoodMsg = GetTime()
 		Print("no food your pet will eat in your bags.")
 	end
@@ -734,6 +832,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		QueueRefresh()
 	elseif event == "UNIT_AURA" then
 		UpdateFeeding()
+	elseif event == "UNIT_HEALTH" then
+		-- only the pet dying / coming back matters, so don't rescan the bags on every health tick
+		if PetState() ~= lastPetState then QueueRefresh() end
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		if pendingLayout then ApplyLayout() end
 		if pendingSecure or pendingLayout then Refresh() end
@@ -751,6 +852,7 @@ SafeRegister("UNIT_PET", "player")
 SafeRegister("UNIT_LEVEL", "pet")
 SafeRegister("UNIT_HAPPINESS", "pet")
 SafeRegister("UNIT_AURA", "pet") -- the feeding buff drives the countdown
+SafeRegister("UNIT_HEALTH", "pet") -- notice the pet dying / being revived (pet care)
 SafeRegister("UNIT_POWER_UPDATE", "pet") -- Forever exposes happiness as a pet power, too
 
 ---------------------------------------------------------------------------
@@ -791,3 +893,22 @@ SlashCmdList.KIBBLE = function(msg)
 		Print("Right-click the button (or /kibble config) for settings. Shift-drag moves it, /kibble reset puts it back. Key binding: Options > Key Bindings > AddOns.")
 	end
 end
+
+---------------------------------------------------------------------------
+-- Exports for Restock.lua and Panel.lua (only hunters get this far)
+---------------------------------------------------------------------------
+
+ns.core = {
+	Settings    = function() return S end,   -- S is replaced when the saved settings load
+	Print       = Print,
+	IsSecret    = IsSecret,
+	PetIsOut    = PetIsOut,
+	PetCanEat   = PetCanEat,
+	ChooseFood  = ChooseFood,
+	ItemName    = ItemName,
+	Refresh     = Refresh,
+	Apply       = Apply,
+	OpenMenu    = OpenMenu,
+	PlayAlertSound = PlayAlertSound,
+	UpdateFeeding  = UpdateFeeding,
+}

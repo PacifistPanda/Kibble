@@ -2,7 +2,7 @@
 
 # Kibble
 
-One button to feed your hunter pet, for **WoW Forever** (interface 16001).
+One button to feed, revive and call your hunter pet, for **WoW Forever** (interface 16001).
 
 Kibble puts a single movable button on screen (and a key binding) that casts Feed Pet on the best food
 in your bags. The ring around the button shows your pet's mood and pulses when it isn't happy, and
@@ -12,6 +12,8 @@ Kibble warns you when you have no food your pet will eat.
 
 - **One click (or key press) feeding.** Picks the food for you. By default it saves your best food: it uses
   the cheapest food that still fully feeds your pet, and the highest level food otherwise.
+- **Pet care.** With no living pet the same button revives a dead pet or calls a missing one, and **Ctrl-click mends**. (Can be switched off under Visibility.)
+- **Vendor restock.** At a vendor that sells food your pet eats, a *Restock pet food (buy N)* button appears under the vendor window and tops you up to your target (20 / 40 / 80 / 120). Nothing is bought until you click it; it respects your gold, bag space and ignore list.
 - **Mood ring.** Green, yellow or red around the button, pulsing when the pet is not happy.
 - **No-food and low-food warnings.** On-screen message and chat line, rate limited. Optionally warn when you're down to 5, 10 or 20 foods, and play a sound (off by default; pick from four).
 - **Feeding countdown.** A swipe on the button while your pet is eating, driven by the pet's feeding buff.
@@ -19,7 +21,9 @@ Kibble warns you when you have no food your pet will eat.
   - *Alerts:* on-screen / chat / sound (opt-in) / "getting hungry" hint, a low-food threshold, the alert sound, and how often alerts may repeat.
   - *Appearance:* size and opacity presets, lock position, show the food count, "NO FOOD" text and feeding countdown, reset position.
   - *Food:* "save best food", "smallest stack first" (frees bag space) or "always best food", plus an ignore list of foods Kibble must never use.
-  - *Visibility:* always shown, faded while the pet is happy, or hidden.
+  - *Visibility:* always shown, faded while the pet is happy, or hidden; plus the pet-care option.
+  - *Food* also has the vendor restock target, and *Appearance* the minimap button toggle.
+- **Options panel, minimap button and addon-compartment entry.** Options > AddOns > Kibble has the on/off options and a button that opens the menu. The minimap button is draggable (click: menu, right-click: panel) and can be hidden.
 - Only loads for hunters; the button only shows while a living pet is out.
 
 ## Install
@@ -31,7 +35,8 @@ Download the latest `Kibble.zip` from [Releases](../../releases) and unzip it so
 
 | Action | What it does |
 | --- | --- |
-| Left-click / key binding | Feed the pet |
+| Left-click / key binding | Feed the pet (or revive / call it when it is dead / missing) |
+| Ctrl-click | Mend Pet |
 | Right-click | Open the settings menu |
 | Shift-drag | Move the button (unless locked) |
 | `/kibble` | Print pet mood and the food Kibble would pick |
@@ -45,7 +50,8 @@ Bind a key under **Options > Key Bindings > AddOns > Kibble**.
 
 - Feeding is a protected action, so it only happens when you click or press the key. Kibble can't feed
   automatically, and it can't change the button's food, size or visibility driver in combat; those changes
-  are applied as soon as combat ends.
+  are applied as soon as combat ends. Revive / call / mend / feed is chosen by macro conditionals at click
+  time, so it works in combat.
 - Saved settings live in `KibbleDB`. If you used this addon under its old name (FeedMe), your button
   position is carried over on first load. Delete the old `FeedMe` folder.
 

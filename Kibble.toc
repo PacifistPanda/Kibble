@@ -1,9 +1,14 @@
 ## Interface: 16001
 ## Title: Kibble
-## Notes: One button to feed your hunter pet with the best food in your bags. Lights up when your pet is not happy and warns you when you run out of food. Right-click for settings.
+## Notes: One button to feed, revive and call your hunter pet. Lights up when your pet is not happy, warns you when food runs low, and restocks at vendors. Right-click for settings.
 ## Author: loggstar
-## Version: 1.2.0
+## Version: 1.3.0
 ## IconTexture: Interface\AddOns\Kibble\icon.png
 ## SavedVariables: KibbleDB, FeedMeDB
+## AddonCompartmentFunc: Kibble_OnCompartmentClick
+## AddonCompartmentFuncOnEnter: Kibble_OnCompartmentEnter
+## AddonCompartmentFuncOnLeave: Kibble_OnCompartmentLeave
 
 Kibble.lua
+Restock.lua
+Panel.lua
