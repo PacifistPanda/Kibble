@@ -11,6 +11,9 @@ local function proxy(store)
     if k == "CreateAnimationGroup" or k == "CreateAnimation" or k == "CreateTexture" or k == "CreateMaskTexture" or k == "CreateFontString" then return function() return proxy() end end
     if k == "IsPlaying" then return function() return false end end
     if k == "SetTexture" then return function(_, v) lastTexture = v end end
+    if k == "SetText" then return function(_, v) store.text = v end end
+    if k == "GetText" then return function() return store.text or "" end end
+    if k == "GetStringHeight" then return function() return 20 end end
     if k == "SetAlpha" then return function(_, a) store.alpha = a end end
     if k == "SetSize" then return function(_, w, h) store.size = w end end
     return function() return p end
@@ -67,10 +70,13 @@ CreateFrame = function(_, name, _, template)
   if name == "KibbleRestockButton" then return rbtn end
   if name == "KibbleMinimapButton" then return mbtn end
   if template == "UICheckButtonTemplate" then local c, cst = newCheck(); checks[#checks + 1] = cst; return c end
-  local f, st = proxy(); frames[#frames + 1] = { p = f, st = st }; handlers.events = frames[1].st; return f
+  local f, st = proxy(); frames[#frames + 1] = { p = f, st = st }; handlers.events = frames[1].st
+  if name == "KibbleDialog" then dialogIndex = #frames end
+  return f
 end
 UIParent = proxy(); DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) print("CHAT", m) end }
 UnitClass = function() return "Hunter", "HUNTER" end
+playerName = "Hunter"; UnitName = function() return playerName end; GetRealmName = function() return "Realm" end; UISpecialFrames = {}
 petExists, petDead = true, false
 UnitExists = function() return petExists end; UnitIsDead = function() return petDead end
 IsControlKeyDown = function() return false end
@@ -142,12 +148,12 @@ local chunk = assert(loadfile(path))
 local ns = {}
 local dir = path:match("^(.*)/[^/]*$") or "."
 chunk("Kibble", ns)
-for _, f in ipairs{ "Restock.lua", "Panel.lua" } do assert(loadfile(dir .. "/" .. f))("Kibble", ns) end
+for _, f in ipairs{ "Restock.lua", "Profiles.lua", "Panel.lua" } do assert(loadfile(dir .. "/" .. f))("Kibble", ns) end
 FeedMeDB = { pos = { "TOP", "TOP", 7, 9 } }; KibbleDB = nil   -- pre-rename saved data
 local ev = frames[1].st["script:OnEvent"]
 ev(nil, "ADDON_LOADED", "Kibble")
 assert(KibbleDB.pos[3] == 7 and FeedMeDB == nil, "FeedMe -> Kibble migration keeps position, clears old var")
-assert(KibbleDB.settings.size == 40 and KibbleDB.settings.foodMode == "save", "defaults merged")
+assert(KibbleDB.profiles.Default.size == 40 and KibbleDB.profiles.Default.foodMode == "save", "defaults merged")
 assert(bstore.type2 == "", "type2 blocks right-click feed")
 assert(drivers[#drivers] == "show", "driver set")
 ev(nil, "PLAYER_LOGIN")
@@ -174,15 +180,15 @@ assert(macro():find("item:11"))
 local ign = find(food, "Ignored foods")
 local names = {} for _, k in ipairs(ign.kids) do names[#names+1] = k.label end
 print("ignore list:", table.concat(names, ", "))
-find(ign, "Food11").set(); assert(macro():find("item:12"), "ignored food skipped"); assert(KibbleDB.settings.ignored[11] == true)
-find(ign, "Food11").set(); assert(KibbleDB.settings.ignored[11] == nil, "unignore clears key")
+find(ign, "Food11").set(); assert(macro():find("item:12"), "ignored food skipped"); assert(KibbleDB.profiles.Default.ignored[11] == true)
+find(ign, "Food11").set(); assert(KibbleDB.profiles.Default.ignored[11] == nil, "unignore clears key")
 find(ign, "Food11").set(); find(ign, "Food12").set(); find(ign, "Food10").set()
 assert(not macro():find("Feed Pet") and not macro():find("/use"), "all ignored -> no feed branch, no /use"); assert(macro():find("Revive Pet"), "pet care still there"); print("all ignored -> no feed branch OK")
-for _, id in ipairs{10,11,12} do KibbleDB.settings.ignored[id] = nil end; ev(nil, "BAG_UPDATE_DELAYED")
+for _, id in ipairs{10,11,12} do KibbleDB.profiles.Default.ignored[id] = nil end; ev(nil, "BAG_UPDATE_DELAYED")
 
 -- size / opacity / visibility presets
 local look = find(menuRoot, "Appearance")
-find(look, "Large").set(); assert(KibbleDB.settings.size == 52 and bstore.size == 52, "size applied")
+find(look, "Large").set(); assert(KibbleDB.profiles.Default.size == 52 and bstore.size == 52, "size applied")
 find(look, "50%").set();   assert(bstore.alpha == 0.5)
 local vis = find(menuRoot, "Visibility")
 find(vis, "Fade while pet is happy").set(); assert(math.abs(bstore.alpha - 0.075) < 1e-9, "fades while happy: "..tostring(bstore.alpha))
@@ -197,15 +203,15 @@ combat = false; ev(nil, "PLAYER_REGEN_ENABLED")
 assert(bstore.size == 32 and drivers[#drivers] == "hide", "deferred layout applied after combat"); print("combat deferral OK")
 
 -- alerts respect toggles + throttle setting
-KibbleDB.settings.alertSound = false; KibbleDB.settings.alertChat = false
+KibbleDB.profiles.Default.alertSound = false; KibbleDB.profiles.Default.alertChat = false
 for k in pairs(items) do items[k] = nil end
 ev(nil, "UNIT_PET", "player"); ev(nil, "BAG_UPDATE_DELAYED")   -- hadFood nil -> no "out of food" alert expected
 
 -- ===== 1.2 features =====
-assert(KibbleDB.settings.alertSound == false and KibbleDB.settings.lowFood == 0, "sound + low-food default OFF")
+assert(KibbleDB.profiles.Default.alertSound == false and KibbleDB.profiles.Default.lowFood == 0, "sound + low-food default OFF")
 local alerts = find(menuRoot, "Alerts")
 local function reset_food(items_) for k in pairs(items) do items[k] = nil end for k, v in pairs(items_) do items[k] = v end end
-KibbleDB.settings.alertScreen = true; KibbleDB.settings.alertChat = false; KibbleDB.settings.throttle = 15
+KibbleDB.profiles.Default.alertScreen = true; KibbleDB.profiles.Default.alertChat = false; KibbleDB.profiles.Default.throttle = 15
 
 -- low-food warning
 reset_food{ [1] = { 10, 50 } }; clock = clock + 100; ev(nil, "UNIT_PET", "player"); shown = {}
@@ -221,10 +227,10 @@ print("low-food warning OK")
 
 -- sound opt-in + picker
 find(alerts, "Whisper ping").set(); assert(played[#played] == 2, "picker previews the sound")
-KibbleDB.settings.alertSound = true; KibbleDB.settings.lowFood = 10; items[1] = { 10, 50 }; ev(nil, "BAG_UPDATE_DELAYED")
+KibbleDB.profiles.Default.alertSound = true; KibbleDB.profiles.Default.lowFood = 10; items[1] = { 10, 50 }; ev(nil, "BAG_UPDATE_DELAYED")
 local n = #played; items[1] = { 10, 4 }; clock = clock + 100; ev(nil, "BAG_UPDATE_DELAYED")
 assert(#played == n + 1 and played[#played] == 2, "alert plays the chosen sound once sound is enabled")
-KibbleDB.settings.alertSound = false; KibbleDB.settings.lowFood = 0
+KibbleDB.profiles.Default.alertSound = false; KibbleDB.profiles.Default.lowFood = 0
 print("sound opt-in OK")
 
 -- smallest-stack mode (pet level 20: foods 11 (lvl16) and 12 (lvl25) both give full happiness)
@@ -284,9 +290,9 @@ petDead = false; petExists = false; ev(nil, "UNIT_HEALTH", "pet"); assert(lastTe
 reset_food{}; chatlog = {}; clock = clock + 10
 bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 0, "no 'no food' message while the pet is missing")
 find(vis3, "Fade while pet is happy").set()
-assert(bstore.alpha == KibbleDB.settings.opacity, "not faded while offering to call the pet: "..tostring(bstore.alpha))
+assert(bstore.alpha == KibbleDB.profiles.Default.opacity, "not faded while offering to call the pet: "..tostring(bstore.alpha))
 petExists = true; ev(nil, "UNIT_PET", "player")
-assert(bstore.alpha < KibbleDB.settings.opacity, "faded again once the pet is back and happy")
+assert(bstore.alpha < KibbleDB.profiles.Default.opacity, "faded again once the pet is back and happy")
 find(vis3, "Always show").set()
 clock = clock + 10; bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 1 and chatlog[1]:find("no food"), "message returns with a living pet")
 lastTexture = nil; ev(nil, "UNIT_HEALTH", "pet"); assert(lastTexture == nil, "health ticks without a state change do not refresh")
@@ -302,7 +308,7 @@ merchant = {
   { id = 21,  price = 5,  stack = 1, maxStack = 20, ext = true },     -- costs a token: skipped
   { id = 20,  price = 25, stack = 5, maxStack = 20 },                 -- bundles of 5, 20 per purchase
 }
-reset_food{ [1] = { 11, 3 } }; money = 100000; bought = {}; pending = {}; KibbleDB.settings.restockTarget = 40
+reset_food{ [1] = { 11, 3 } }; money = 100000; bought = {}; pending = {}; KibbleDB.profiles.Default.restockTarget = 40
 rev(nil, "MERCHANT_SHOW")
 assert(rst.shown and rst.enabled and rst.text == "Buy 40 pet food", "restock button offered: "..tostring(rst.text))
 local function hasPoint(pt, rel, rp) for _, q in ipairs(rst.points or {}) do if q[1] == pt and q[2] == rel and q[3] == rp then return true end end return false end
@@ -329,11 +335,11 @@ assert(rst.text == "Bags are full" and not rst.enabled, "bags full: "..tostring(
 reset_food{ [1] = { 11, 3 } }
 local food3 = find(menuRoot, "Food")
 find(food3, "20").set(); assert(rst.text == "Buy 20 pet food", "target from the menu applies at once: "..tostring(rst.text))
-KibbleDB.settings.restockTarget = 40
+KibbleDB.profiles.Default.restockTarget = 40
 petExists = false; rev(nil, "UNIT_PET"); assert(not rst.shown, "hidden without a pet")
 petExists = true; rev(nil, "UNIT_PET"); assert(rst.shown)
 MerchantFrame.selectedTab = 2; rev(nil, "MERCHANT_UPDATE"); assert(not rst.shown, "hidden on the buyback tab"); MerchantFrame.selectedTab = 1
-KibbleDB.settings.ignored[20] = true; rev(nil, "MERCHANT_UPDATE"); assert(not rst.shown, "ignored foods are not offered"); KibbleDB.settings.ignored[20] = nil
+KibbleDB.profiles.Default.ignored[20] = true; rev(nil, "MERCHANT_UPDATE"); assert(not rst.shown, "ignored foods are not offered"); KibbleDB.profiles.Default.ignored[20] = nil
 merchant = { { id = 21, price = 5, stack = 1, maxStack = 20, ext = true } }; rev(nil, "MERCHANT_UPDATE"); assert(not rst.shown, "extended-cost items are not offered")
 merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }; rev(nil, "MERCHANT_UPDATE"); assert(rst.shown)
 bought = {}; rst.scripts.OnClick(); rev(nil, "MERCHANT_CLOSED"); assert(chatlog[#chatlog]:find("restock stopped"), "closing the vendor stops the run")
@@ -349,7 +355,7 @@ assert(rst.shown and rst.text == "Buy 40 pet food", "button appears once the pet
 -- picks among affordable foods instead of failing on the best one
 lvl[22] = 5; lvl[23] = 30
 merchant = { { id = 23, price = 500, stack = 1, maxStack = 20 }, { id = 22, price = 5, stack = 1, maxStack = 20 } }
-money = 100; KibbleDB.settings.foodMode = "save"; rev(nil, "MERCHANT_UPDATE")
+money = 100; KibbleDB.profiles.Default.foodMode = "save"; rev(nil, "MERCHANT_UPDATE")
 assert(rst.text == "Buy 20 pet food", "buys the affordable food when the best is too dear: "..tostring(rst.text))
 money = 1; rev(nil, "MERCHANT_UPDATE"); assert(rst.shown and not rst.enabled and rst.text == "Can't afford pet food", "says why when nothing is affordable: "..tostring(rst.text))
 money = 100000; merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }; rev(nil, "MERCHANT_UPDATE")
@@ -371,17 +377,17 @@ assert(type(Kibble_OnCompartmentClick) == "function" and type(Kibble_OnCompartme
 frames[3].st["script:OnEvent"](frames[3].p, "PLAYER_LOGIN")
 assert(panelRegistered == "Kibble" and #checks == 10, "panel registered with 10 options")
 local panelFrame = frames[4].st
-KibbleDB.settings.alertScreen = false; panelFrame["script:OnShow"](); assert(checks[1].checked == false and checks[2].checked == KibbleDB.settings.alertChat, "panel shows current settings")
-KibbleDB.settings.alertScreen = true
+KibbleDB.profiles.Default.alertScreen = false; panelFrame["script:OnShow"](); assert(checks[1].checked == false and checks[2].checked == KibbleDB.profiles.Default.alertChat, "panel shows current settings")
+KibbleDB.profiles.Default.alertScreen = true
 checks[9].checked = false; checks[9].scripts.OnClick(checks[9].obj)
-assert(KibbleDB.settings.petCare == false and macro():find("^/cast Feed Pet") and not macro():find("Revive"), "panel checkbox applies (care off -> plain feed macro): "..macro())
-checks[9].checked = true; checks[9].scripts.OnClick(checks[9].obj); assert(KibbleDB.settings.petCare == true)
+assert(KibbleDB.profiles.Default.petCare == false and macro():find("^/cast Feed Pet") and not macro():find("Revive"), "panel checkbox applies (care off -> plain feed macro): "..macro())
+checks[9].checked = true; checks[9].scripts.OnClick(checks[9].obj); assert(KibbleDB.profiles.Default.petCare == true)
 assert(mst.shown, "minimap button shown by default")
-local ang = KibbleDB.settings.minimapAngle
+local ang = KibbleDB.minimapAngle or 3.93 -- unset until the button is dragged
 assert(math.abs(mst.point[4] - math.cos(ang) * 75) < 1e-6 and math.abs(mst.point[5] - math.sin(ang) * 75) < 1e-6, "minimap placement")
 mst.scripts.OnDragStart(mbtn); assert(mst.scripts.OnUpdate, "dragging tracks the cursor")
-mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.settings.minimapAngle) < 1e-6 and math.abs(mst.point[4] - 75) < 1e-6, "angle follows the cursor")
-cursor = { 500, 575 }; mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.settings.minimapAngle - math.pi / 2) < 1e-6)
+mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.minimapAngle) < 1e-6 and math.abs(mst.point[4] - 75) < 1e-6, "angle follows the cursor")
+cursor = { 500, 575 }; mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.minimapAngle - math.pi / 2) < 1e-6)
 mst.scripts.OnDragStop(mbtn); assert(mst.scripts.OnUpdate == nil, "drag ends cleanly")
 checks[10].checked = false; checks[10].scripts.OnClick(checks[10].obj); assert(mst.shown == false, "panel can hide the minimap button")
 find(find(menuRoot, "Appearance"), "Show minimap button").set(); assert(mst.shown == true, "menu can show it again")
@@ -428,13 +434,149 @@ local rev3 = frames[n0 + 1].st["script:OnEvent"]; rst.points = {}; rev3(nil, "ME
 assert(hasPoint("TOPLEFT", MerchantFrameTab2, "TOPRIGHT") and hasPoint("BOTTOMLEFT", MerchantFrameTab2, "BOTTOMRIGHT") and hasPoint("RIGHT", MerchantFrame, "RIGHT"), "tab-look button: tab row height, filling to the window edge")
 print("EllesmereUI skin OK")
 
+
+-- ===== 1.4 profiles =====
+local K, PR = ns.core, ns.Profiles
+local function has(node, label) for _, k in ipairs(node.kids) do if k.label == label then return k end end end
+for key in pairs(K.Defaults) do assert(PR.Covers(key), "export/import validates the setting: "..key) end
+
+-- base64 + checksum against independently computed values
+assert(PR.Encode("Man"):match("^KIBBLE1:TWFu:(%d+)$") == "56230247", "base64 + Adler-32 reference vector")
+assert(PR.Encode("Ma"):match("^KIBBLE1:TWE=:") and PR.Encode("M"):match("^KIBBLE1:TQ==:"), "base64 padding")
+
+-- storage and per-character assignment
+local db = K.Account()
+assert(K.ActiveProfile() == "Default" and db.profileKeys["Hunter-Realm"] == "Default" and db.minimapAngle ~= false, "this character starts on Default")
+
+-- create / copy / names
+local cfg = K.Settings(); cfg.size = 52; cfg.ignored[11] = true
+assert(PR.Create("Raider") == "Raider" and db.profiles.Raider.size == 40 and next(db.profiles.Raider.ignored) == nil, "a new profile starts from the defaults")
+assert(PR.Create("Default copy", "Default") and db.profiles["Default copy"].size == 52 and db.profiles["Default copy"].ignored[11], "a copy keeps settings and the ignore list")
+db.profiles["Default copy"].ignored[11] = nil; assert(cfg.ignored[11], "the copy is independent of the original")
+for _, bad in ipairs{ "", "   ", ("x"):rep(33), "bad|name", "raider", "RAIDER", "tab\there" } do
+  local n, e = PR.Create(bad); assert(n == nil and e, "rejects the name '"..bad.."'")
+end
+assert(PR.Find("rAiDeR") == "Raider" and PR.Create("  Padded  ") == "Padded", "names are trimmed and matched ignoring case")
+
+-- switching applies at once and is remembered for this character
+assert(K.UseProfile("Raider") and K.Settings() == db.profiles.Raider and K.ActiveProfile() == "Raider" and bstore.size == 40, "switching applies the profile (button size "..tostring(bstore.size)..")")
+assert(db.profileKeys["Hunter-Realm"] == "Raider" and K.UseProfile("nope") == false and K.ActiveProfile() == "Raider")
+
+-- rename / delete / reset
+assert(PR.Rename("Default", "x") == nil, "Default can't be renamed")
+assert(PR.Rename("Raider", "Raid Night") == "Raid Night" and db.profiles.Raider == nil and K.ActiveProfile() == "Raid Night"
+  and K.Settings() == db.profiles["Raid Night"] and db.profileKeys["Hunter-Realm"] == "Raid Night", "renaming the active profile keeps it active")
+db.profileKeys["Other-Realm"] = "Raid Night"; PR.Rename("Raid Night", "Raiding"); assert(db.profileKeys["Other-Realm"] == "Raiding", "other characters follow a rename")
+assert(PR.Delete("Raiding") == nil and PR.Delete("Default") == nil, "can't delete the active profile or Default")
+K.UseProfile("Default")
+assert(PR.Delete("Raiding") and db.profiles.Raiding == nil and db.profileKeys["Other-Realm"] == "Default", "deleting sends its characters back to Default")
+cfg = K.Settings(); cfg.size = 64; cfg.ignored[12] = true; cfg.alertSound = true
+assert(PR.Reset("Default") and K.Settings() == cfg and cfg.size == 40 and next(cfg.ignored) == nil and cfg.alertSound == false, "reset restores the defaults in place")
+
+-- a different character loads its own profile
+db.profiles.Alt = PR.NewProfile(); db.profiles.Alt.size = 64; db.profileKeys["Alt-Realm"] = "Alt"
+local mainSlash = SlashCmdList.KIBBLE   -- extra copies of the addon below would replace the handler
+playerName = "Alt"; local nsAlt = {}; local nFrames = #frames
+assert(loadfile(path))("Kibble", nsAlt); frames[nFrames + 1].st["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
+assert(nsAlt.core.ActiveProfile() == "Alt" and nsAlt.core.Settings().size == 64, "another character gets its own profile")
+playerName = "Brand New"; nsAlt = {}; nFrames = #frames
+assert(loadfile(path))("Kibble", nsAlt); frames[nFrames + 1].st["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
+assert(nsAlt.core.ActiveProfile() == "Default" and db.profileKeys["Brand New-Realm"] == "Default", "a new character starts on Default")
+playerName = "Hunter"; SlashCmdList.KIBBLE = mainSlash; K.UseProfile("Default")
+
+-- export / import round trip with every setting changed
+local alts = { throttle = 15, lowFood = 20, size = 64, opacity = 0.5, restockTarget = 120, foodMode = "best", visibility = "hidden", soundChoice = "TELL_MESSAGE" }
+local all = PR.NewProfile()
+for key, v in pairs(K.Defaults) do
+  if type(v) == "boolean" then all[key] = not v elseif alts[key] ~= nil then all[key] = alts[key] else error("test needs a value for "..key) end
+end
+all.ignored = { [30] = true, [4] = true, [999] = true }
+local str, cut = PR.Export(all)
+assert(str:match("^KIBBLE1:[A-Za-z0-9+/=]+:%d+$") and not cut, "export string shape")
+local back, skipped = PR.Import(str)
+assert(back and skipped == 0, "import of an export is clean")
+for key in pairs(K.Defaults) do assert(back[key] == all[key], "round trip: "..key) end
+assert(back.ignored[4] and back.ignored[30] and back.ignored[999] and back.settingsVersion == 2, "ignore list and version survive")
+assert(PR.Import(str:gsub(("."):rep(40), "%0\n  ")), "line-wrapped / indented strings still import")
+
+-- hostile or damaged strings
+local function refused(text, frag) local p, e = PR.Import(text); assert(p == nil and e and e:find(frag, 1, true), "refuses ("..frag..") :: "..tostring(e)) end
+refused("", "nothing"); refused("hello world", "not a Kibble export")
+refused(str:gsub(":%d+$", ":1"), "checksum")
+refused(str:gsub("^(KIBBLE1:.)", function(c) return "KIBBLE1:" .. (c:sub(-1) == "A" and "B" or "A") end), "checksum")
+refused("KIBBLE2:" .. str:match("^KIBBLE1:(.*)$"), "newer Kibble")
+refused(PR.Encode("size=999\nfoodMode=evil"), "no settings")
+refused(PR.Encode("just some words"), "no settings")
+local messy, nSkipped = PR.Import(PR.Encode("size=52\nbogus=1\nfoodMode=evil\nalertSound=maybe\nsoundChoice=lower\nignored=5,abc,-3,99999999999,7"))
+assert(messy and messy.size == 52 and messy.foodMode == "save" and messy.alertSound == false and messy.soundChoice == "RAID_WARNING", "invalid values fall back to defaults")
+assert(messy.ignored[5] and messy.ignored[7] and not messy.ignored[-3] and nSkipped == 7, "bad ignore entries are skipped and counted: "..tostring(nSkipped))
+assert(not PR.Import(PR.Encode("size=52")).ignored[1], "no ignore list is fine")
+local many = PR.NewProfile(); for i = 1, 70 do many.ignored[i] = true end
+local manyStr, manyCut = PR.Export(many); local manyBack = PR.Import(manyStr)
+local manyN = 0; for _ in pairs(manyBack.ignored) do manyN = manyN + 1 end
+assert(manyCut and manyN == 60, "the ignore list is capped in exports (" .. manyN .. ")")
+-- a hand-made string with a huge ignore list is capped on import too
+local ids = {}; for i = 1, 500 do ids[i] = tostring(i) end
+local huge, hugeSkipped = PR.Import(PR.Encode("ignored=" .. table.concat(ids, ",")))
+local hugeN = 0; for _ in pairs(huge.ignored) do hugeN = hugeN + 1 end
+assert(hugeN == 60 and hugeSkipped == 440, "import caps the ignore list at 60 (" .. hugeN .. ", skipped " .. hugeSkipped .. ")")
+local lua = PR.Encode("size=52\nignored=1\n') os.exit(1) --")  -- nothing in an import is ever executed
+assert(PR.Import(lua), "junk lines are skipped, never run")
+
+-- importing creates a new profile, switches to it and keeps an explicit opt-in to sound
+local before = K.ActiveProfile()
+local nm, info, prev = PR.ImportAndUse(str)
+assert(nm == "Imported" and info == 0 and prev == before and K.ActiveProfile() == "Imported" and K.Settings().alertSound == true, "import creates + switches (alertSound kept)")
+assert(PR.ImportAndUse(str) == "Imported 2" and PR.ImportAndUse(str, "Mine") == "Mine", "unique names for imports")
+local nProfiles = #PR.Names(); local fail, why = PR.ImportAndUse("garbage")
+assert(fail == nil and why and #PR.Names() == nProfiles, "a failed import creates nothing")
+K.UseProfile("Default")
+
+-- dialogs
+ns.ShowExport(); local dlg = frames[dialogIndex].p
+assert(dlg.spec.readOnly and dlg.spec.input == "multi", "export dialog is a read-only text box")
+local fromDialog = PR.Import(dlg.spec.value); for key in pairs(K.Defaults) do assert(fromDialog[key] == K.Settings()[key], "dialog exports the active profile: "..key) end
+chatlog = {}; ns.ShowImport(); frames[dialogIndex].p.spec.onOK("garbage"); assert(chatlog[#chatlog]:find("import failed"), "import dialog reports a bad string")
+frames[dialogIndex + 2].st.text = str; frames[dialogIndex + 3].st["script:OnClick"]()    -- type into the box, press Import
+assert(K.ActiveProfile():find("^Imported") and chatlog[#chatlog]:find("imported as profile"), "pressing Import uses the typed text: "..tostring(chatlog[#chatlog]))
+K.UseProfile("Default")
+
+-- the menu
+menuRoot = nil; K.OpenMenu(); local pm = has(menuRoot, "Profiles")
+assert(pm, "Profiles submenu exists")
+local radios = {} for _, k in ipairs(pm.kids) do if k.kind == "radio" then radios[#radios + 1] = k.label end end
+assert(table.concat(radios, ",") == table.concat(PR.Names(), ","), "one radio per profile")
+has(pm, "Mine").set(); assert(K.ActiveProfile() == "Mine", "picking a profile switches to it")
+menuRoot = nil; K.OpenMenu(); pm = has(menuRoot, "Profiles")   -- picking closes the menu; the next open is rebuilt
+assert(has(pm, "Rename this profile..."), "rename is offered for a normal profile")
+has(pm, "New profile...").fn(); assert(frames[dialogIndex].p.spec.input == "line", "new profile asks for a name")
+frames[dialogIndex].p.spec.onOK("Fresh"); assert(K.ActiveProfile() == "Fresh" and K.Settings().size == 40, "a new profile is created and used")
+has(pm, "Copy this profile...").fn(); assert(frames[dialogIndex].p.spec.value == "Fresh copy")
+frames[dialogIndex].p.spec.onOK("Fresh2"); assert(K.ActiveProfile() == "Fresh2")
+has(pm, "Rename this profile...").fn(); frames[dialogIndex].p.spec.onOK("Renamed"); assert(K.ActiveProfile() == "Renamed")
+has(pm, "Reset this profile").fn(); local confirmSpec = frames[dialogIndex].p.spec
+assert(confirmSpec.input == nil and confirmSpec.cancelText == (NO or "No"), "reset asks first"); K.Settings().size = 64; confirmSpec.onOK(); assert(K.Settings().size == 40, "confirming resets")
+menuRoot = nil; K.OpenMenu(); pm = has(menuRoot, "Profiles")
+local del = has(pm, "Delete a profile"); assert(del and not has(del, "Renamed") and not has(del, "Default") and has(del, "Mine"), "delete lists other profiles, never the active one or Default")
+has(del, "Mine").fn(); frames[dialogIndex].p.spec.onOK(); assert(not PR.Find("Mine"), "confirming deletes")
+K.UseProfile("Default"); menuRoot = nil; K.OpenMenu(); assert(not has(has(menuRoot, "Profiles"), "Rename this profile..."), "Default can't be renamed from the menu")
+
+-- slash commands
+chatlog = {}; SlashCmdList.KIBBLE("profile"); assert(chatlog[#chatlog]:find("profiles: ") and chatlog[#chatlog]:find('uses "Default"'), "/kibble profile lists them")
+SlashCmdList.KIBBLE("profile renamed"); assert(K.ActiveProfile() == "Renamed" and chatlog[#chatlog]:find("now using"), "/kibble profile <name> switches (any case)")
+SlashCmdList.KIBBLE("profile nope"); assert(K.ActiveProfile() == "Renamed" and chatlog[#chatlog]:find("no profile called"))
+SlashCmdList.KIBBLE("export"); assert(frames[dialogIndex].p.spec.title == "Export profile"); SlashCmdList.KIBBLE("import"); assert(frames[dialogIndex].p.spec.title == "Import profile")
+K.UseProfile("Default")
+print("profiles OK")
+
 -- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)
 local c2 = assert(loadfile(arg[1] or "Kibble.lua"))
-KibbleDB = { settings = { alertSound = true, size = 52 } }; FeedMeDB = nil; c2("Kibble")
+KibbleDB = { settings = { alertSound = true, size = 52, minimapAngle = 1.5 } }; FeedMeDB = nil; c2("Kibble")
 frames[1].st["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
-assert(KibbleDB.settings.alertSound == false and KibbleDB.settings.size == 52 and KibbleDB.settings.settingsVersion == 2, "1.1.0 'sound on' reset once, other settings kept")
-KibbleDB.settings.alertSound = true; c2("Kibble"); frames[1].st["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
-assert(KibbleDB.settings.alertSound == true, "a deliberate opt-in survives later loads")
+assert(KibbleDB.settings == nil and KibbleDB.minimapAngle == 1.5 and KibbleDB.profiles.Default.minimapAngle == nil, "legacy flat settings become the Default profile; the minimap angle moves to the account")
+assert(KibbleDB.profiles.Default.alertSound == false and KibbleDB.profiles.Default.size == 52 and KibbleDB.profiles.Default.settingsVersion == 2, "1.1.0 'sound on' reset once, other settings kept")
+KibbleDB.profiles.Default.alertSound = true; c2("Kibble"); frames[1].st["script:OnEvent"](nil, "ADDON_LOADED", "Kibble")
+assert(KibbleDB.profiles.Default.alertSound == true, "a deliberate opt-in survives later loads")
 print("sound migration OK")
 
 print("slash:")

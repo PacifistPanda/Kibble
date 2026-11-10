@@ -128,6 +128,8 @@ local function RefreshPanel()
 	end
 end
 
+ns.RefreshPanel = RefreshPanel
+
 local function BuildPanel()
 	if not (Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory) then return end
 	local f = CreateFrame("Frame")
@@ -187,7 +189,7 @@ end
 local mini
 
 local function PlaceMinimapButton()
-	local angle = K.Settings().minimapAngle or 3.93
+	local angle = K.Account().minimapAngle or 3.93
 	local radius = Minimap:GetWidth() / 2 + 5
 	mini:ClearAllPoints()
 	mini:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * radius, math.sin(angle) * radius)
@@ -197,7 +199,7 @@ local function DragMinimapButton()
 	local mx, my = Minimap:GetCenter()
 	local cx, cy = GetCursorPosition()
 	local scale = Minimap:GetEffectiveScale()
-	K.Settings().minimapAngle = atan2(cy / scale - my, cx / scale - mx)
+	K.Account().minimapAngle = atan2(cy / scale - my, cx / scale - mx)
 	PlaceMinimapButton()
 end
 

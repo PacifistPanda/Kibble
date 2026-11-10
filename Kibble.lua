@@ -54,27 +54,57 @@ local DEFAULTS = {
 	petCare     = true,    -- the button also revives a dead pet / calls a missing one (Ctrl-click mends)
 	restockTarget = 40,    -- vendor restock: buy up to this many of the chosen food
 	showMinimap = true,    -- minimap button
-	minimapAngle = 3.93,   -- radians around the minimap (225 degrees = bottom left)
 }
+-- Not part of a profile: the button position (KibbleDB.pos) and the minimap button angle
+-- (KibbleDB.minimapAngle, radians; 3.93 = bottom left) belong to the account, since screen layouts
+-- differ and shouldn't travel with a profile or an exported string.
 
 local S = {}
 for k, v in pairs(DEFAULTS) do S[k] = v end
 S.ignored = {}             -- [itemID] = true; foods Kibble must never pick
+local activeProfile = "Default"
 
-local function LoadSettings()
-	KibbleDB.settings = KibbleDB.settings or {}
-	local saved = KibbleDB.settings
+-- Profiles: KibbleDB.profiles[name] = the settings table; KibbleDB.profileKeys["Char-Realm"] = the
+-- profile that character uses. S is always the active profile's table.
+local function CharKey()
+	return (UnitName("player") or "?") .. "-" .. ((GetRealmName and GetRealmName()) or "?")
+end
+
+local function NormalizeProfile(p)
 	for k, v in pairs(DEFAULTS) do
-		if saved[k] == nil then saved[k] = v end
+		if p[k] == nil then p[k] = v end
 	end
-	saved.ignored = saved.ignored or {}
+	p.ignored = p.ignored or {}
 	-- Settings version 2: sound alerts became opt-in. 1.1.0 defaulted them to on, so anyone who
 	-- has a saved "on" from that default gets it switched off once; they can turn it back on.
-	if (saved.settingsVersion or 1) < 2 then
-		saved.alertSound = false
-		saved.settingsVersion = 2
+	if (p.settingsVersion or 1) < 2 then
+		p.alertSound = false
+		p.settingsVersion = 2
 	end
-	S = saved
+	return p
+end
+
+local function LoadSettings()
+	local db = KibbleDB
+	if not db.profiles then
+		-- first load with profiles: the settings you already had become the "Default" profile
+		local legacy = db.settings or {}
+		db.minimapAngle = db.minimapAngle or legacy.minimapAngle
+		legacy.minimapAngle = nil
+		db.profiles = { Default = legacy }
+		db.settings = nil
+	end
+	db.profileKeys = db.profileKeys or {}
+	for _, p in pairs(db.profiles) do NormalizeProfile(p) end
+	if not db.profiles.Default then db.profiles.Default = NormalizeProfile({}) end
+	local key = CharKey()
+	local name = db.profileKeys[key]
+	if not (name and db.profiles[name]) then
+		name = "Default"
+		db.profileKeys[key] = name
+	end
+	activeProfile = name
+	S = db.profiles[name]
 end
 
 ---------------------------------------------------------------------------
@@ -663,6 +693,21 @@ local function Apply()
 	Refresh()
 end
 
+-- Switch this character to another profile and apply it everywhere (button, minimap, panel).
+local function UseProfile(name)
+	local p = KibbleDB.profiles[name]
+	if not p then return false end
+	KibbleDB.profileKeys[CharKey()] = name
+	activeProfile = name
+	S = NormalizeProfile(p)
+	hadFood, lastHappiness, lowWarned = nil, nil, false
+	Apply()
+	UpdateFeeding()
+	if ns.UpdateMinimap then ns.UpdateMinimap() end
+	if ns.RefreshPanel then ns.RefreshPanel() end
+	return true
+end
+
 local function AddChecks(parent, entries)
 	for _, e in ipairs(entries) do
 		local label, key, after = e[1], e[2], e[3]
@@ -772,6 +817,8 @@ local function BuildMenu(_, root)
 	AddChecks(vis, {
 		{ "Revive / call a missing pet (Ctrl-click mends)", "petCare", Apply },
 	})
+
+	if ns.BuildProfileMenu then ns.BuildProfileMenu(root) end -- Profiles.lua
 end
 
 local function OpenMenu()
@@ -864,7 +911,8 @@ SafeRegister("UNIT_POWER_UPDATE", "pet") -- Forever exposes happiness as a pet p
 
 SLASH_KIBBLE1 = "/kibble"
 SlashCmdList.KIBBLE = function(msg)
-	msg = (msg or ""):lower()
+	local raw = msg or ""
+	msg = raw:lower()
 	if msg == "config" or msg == "options" or msg == "settings" then
 		OpenMenu()
 	elseif msg == "buffs" then
@@ -881,6 +929,12 @@ SlashCmdList.KIBBLE = function(msg)
 			end
 		end
 		if not any then Print("your pet has no buffs (or no pet is out).") end
+	elseif msg == "export" then
+		if ns.ShowExport then ns.ShowExport() end
+	elseif msg == "import" then
+		if ns.ShowImport then ns.ShowImport() end
+	elseif msg == "profile" or msg == "profiles" or msg:find("^profile%s") then
+		if ns.ProfileCommand then ns.ProfileCommand(raw:match("^%S+%s*(.-)%s*$")) end
 	elseif msg == "vendor" then
 		-- diagnostic: with a vendor open, explains why the restock button is (not) showing
 		if ns.VendorDiag then ns.VendorDiag() else Print("vendor diagnostics unavailable.") end
@@ -896,7 +950,7 @@ SlashCmdList.KIBBLE = function(msg)
 			HAPPY_TEXT[h] or "none/unknown",
 			foodID and (select(2, (C_Item and C_Item.GetItemInfo or GetItemInfo)(foodID)) or ("item:" .. foodID)) or "none",
 			foodCount, total))
-		Print("Right-click the button (or /kibble config) for settings. Shift-drag moves it, /kibble reset puts it back. Key binding: Options > Key Bindings > AddOns.")
+		Print("Right-click the button (or /kibble config) for settings. Shift-drag moves it, /kibble reset puts it back. Profiles: /kibble profile, export, import. Key binding: Options > Key Bindings > AddOns.")
 	end
 end
 
@@ -918,4 +972,9 @@ ns.core = {
 	PlayAlertSound = PlayAlertSound,
 	UpdateFeeding  = UpdateFeeding,
 	PeekCanEat     = function(itemID) return canEatCache[itemID] end, -- cached answer, for diagnostics
+	Account        = function() return KibbleDB end,   -- account-wide data: profiles, button position, minimap angle
+	ActiveProfile  = function() return activeProfile end,
+	UseProfile     = UseProfile,
+	Defaults       = DEFAULTS,
+	SoundChoices   = SOUND_CHOICES,
 }

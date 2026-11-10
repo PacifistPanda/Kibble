@@ -17,6 +17,7 @@ Built for **WoW Forever**.
   while the pet is eating.
 - **Warnings.** On-screen message and chat line when you run out of food, optionally when you're running low,
   and an optional sound (off by default).
+- **Profiles with import / export.** Give each character its own settings, or share a profile as a text string.
 - **Everything is a right-click away.** Alerts, size and opacity, lock position, food choice, visibility.
   There's also an options panel (Options > AddOns > Kibble), a draggable minimap button and an
   addon-compartment entry.
@@ -31,6 +32,8 @@ Built for **WoW Forever**.
 | Shift-drag | Move the button |
 | `/kibble` | Pet mood and the food Kibble would pick |
 | `/kibble config` | Open the settings menu |
+| `/kibble profile [name]` | List profiles / switch this character's profile |
+| `/kibble export`, `/kibble import` | Share a profile as text |
 | `/kibble reset` | Reset the button position |
 
 Bind a key under **Options > Key Bindings > AddOns > Kibble**.

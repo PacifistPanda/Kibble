@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 - 2026-11-10
+
+- Profiles: each character uses a named profile; new characters start on *Default*. Right-click >
+  Profiles to switch, create, copy, rename, reset or delete them. Your current settings become the
+  *Default* profile automatically.
+- Export / import: share a profile as a text string (`/kibble export`, `/kibble import`, or the Profiles
+  menu). Imports are validated: only known settings with valid values are accepted, anything else is
+  skipped and counted.
+- Profile commands: `/kibble profile` lists them, `/kibble profile <name>` switches.
+- A profile holds all settings and the ignore list. The button position and the minimap button angle stay
+  per account.
+
 ## 1.3.1 - 2026-11-10
 
 - The vendor restock button now matches the vendor window. With EllesmereUI it is styled as one of the
