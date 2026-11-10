@@ -187,6 +187,8 @@ local function CreateButton()
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", GameTooltip_Hide)
+	ns.Skin("Button", b)
+	ns.Skin("StateButtonLabel", b) -- white when enabled, grey when disabled
 	return b
 end
 

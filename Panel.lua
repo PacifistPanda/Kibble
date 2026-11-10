@@ -38,6 +38,36 @@ if not K then return end -- not a hunter
 local atan2 = math.atan2 or math.atan
 
 ---------------------------------------------------------------------------
+-- EllesmereUI skinning (optional; see EllesmereUI/SKINNING_API.md)
+-- ns.Skin("Button", frame) restyles one of our widgets to match EllesmereUI. Widgets made
+-- before EllesmereUI hands us its skin facade wait in a queue. Without EllesmereUI (or with
+-- skinning switched off) nothing ever runs.
+---------------------------------------------------------------------------
+
+local skinQueue = {}
+
+function ns.Skin(kind, widget)
+	if not (EllesmereUI and EllesmereUI.RegisterSkin) then return end
+	local S = ns.skin
+	if S then
+		if S[kind] then pcall(S[kind], widget) end
+	else
+		skinQueue[#skinQueue + 1] = { kind, widget }
+	end
+end
+
+if EllesmereUI and EllesmereUI.RegisterSkin then
+	EllesmereUI.RegisterSkin("Kibble", function(S)
+		ns.skin = S
+		local queued = skinQueue
+		skinQueue = {}
+		for _, q in ipairs(queued) do
+			if S[q[1]] then pcall(S[q[1]], q[2]) end
+		end
+	end)
+end
+
+---------------------------------------------------------------------------
 -- Options panel (canvas layout)
 ---------------------------------------------------------------------------
 
@@ -82,6 +112,7 @@ local function BuildPanel()
 	open:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -14)
 	open:SetText("Open the Kibble menu")
 	open:SetScript("OnClick", function() K.OpenMenu() end)
+	ns.Skin("Button", open)
 
 	local previous = open
 	for _, opt in ipairs(PANEL_OPTIONS) do
@@ -97,6 +128,7 @@ local function BuildPanel()
 			if key == "showMinimap" then ns.UpdateMinimap() end
 			if key == "showFeeding" then K.UpdateFeeding() end
 		end)
+		ns.Skin("Checkbox", box)
 		panelChecks[#panelChecks + 1] = { box = box, key = key }
 		previous = box
 	end

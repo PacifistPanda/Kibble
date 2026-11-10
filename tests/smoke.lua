@@ -118,6 +118,10 @@ Minimap = { GetWidth = function() return 140 end, GetCenter = function() return 
 opened = nil
 Settings = { RegisterCanvasLayoutCategory = function(f, name) panelRegistered = name; return { GetID = function() return 99 end } end,
   RegisterAddOnCategory = function() end, OpenToCategory = function(id) opened = id end }
+-- EllesmereUI skin registration + facade stub
+skinFn, skinName, skinCalls, Sstub = nil, nil, {}, {}
+EllesmereUI = { RegisterSkin = function(name, fn) skinName = name; skinFn = fn end }
+for _, k in ipairs{ "Button", "StateButtonLabel", "Checkbox" } do Sstub[k] = function(w) skinCalls[#skinCalls + 1] = { k, w } end end
 GameTooltip = proxy(); GameTooltip_Hide = function() end; SlashCmdList = {}; IsShiftKeyDown = function() return false end
 -- menu recorder
 local function node(label, tree) local n = { label = label, kids = {} }
@@ -355,6 +359,24 @@ opened = nil; mst.scripts.OnClick(mbtn, "RightButton"); assert(opened == 99, "mi
 opened = nil; Kibble_OnCompartmentClick(nil, "RightButton"); assert(opened == 99, "compartment right-click opens the panel")
 menuRoot = nil; Kibble_OnCompartmentClick(nil, "LeftButton"); assert(menuRoot, "compartment click opens the menu")
 print("panel + minimap + compartment OK")
+
+
+-- ===== EllesmereUI skin =====
+assert(skinName == "Kibble" and type(skinFn) == "function", "registered with EllesmereUI under the addon name")
+assert(#skinCalls == 0, "nothing is skinned before EllesmereUI hands over its facade")
+skinFn(Sstub)
+local function skinCount(kind) local n = 0 for _, c in ipairs(skinCalls) do if c[1] == kind then n = n + 1 end end return n end
+assert(skinCount("Button") == 2 and skinCount("StateButtonLabel") == 1 and skinCount("Checkbox") == 10,
+  ("queued widgets skinned (Button %d, label %d, Checkbox %d)"):format(skinCount("Button"), skinCount("StateButtonLabel"), skinCount("Checkbox")))
+local sawRestock = false for _, c in ipairs(skinCalls) do if c[2] == rbtn and c[1] == "Button" then sawRestock = true end end
+assert(sawRestock, "the vendor restock button is skinned")
+local nCalls = #skinCalls; ns.Skin("Button", {}); assert(#skinCalls == nCalls + 1, "widgets made later are skinned at once")
+ns.Skin("DoesNotExist", {})                                   -- a primitive an older EllesmereUI lacks is ignored
+Sstub.Button = function() error("boom") end; ns.Skin("Button", {})  -- and a failing skin never throws
+local savedEUI = EllesmereUI; EllesmereUI = nil
+local ns2 = { core = ns.core }; assert(loadfile(dir .. "/Panel.lua"))("Kibble", ns2); ns2.Skin("Button", {})
+EllesmereUI = savedEUI
+print("EllesmereUI skin OK")
 
 -- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)
 local c2 = assert(loadfile(arg[1] or "Kibble.lua"))

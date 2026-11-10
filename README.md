@@ -52,6 +52,7 @@ Bind a key under **Options > Key Bindings > AddOns > Kibble**.
   automatically, and it can't change the button's food, size or visibility driver in combat; those changes
   are applied as soon as combat ends. Revive / call / mend / feed is chosen by macro conditionals at click
   time, so it works in combat.
+- **EllesmereUI:** if it's installed, Kibble's vendor button and options-panel widgets are restyled to match through EllesmereUI's skinning API (toggle per addon in EllesmereUI's options under *Third-Party Addons*). Without it, nothing changes.
 - Saved settings live in `KibbleDB`. If you used this addon under its old name (FeedMe), your button
   position is carried over on first load. Delete the old `FeedMe` folder.
 

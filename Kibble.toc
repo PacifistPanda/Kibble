@@ -2,8 +2,9 @@
 ## Title: Kibble
 ## Notes: One button to feed, revive and call your hunter pet. Lights up when your pet is not happy, warns you when food runs low, and restocks at vendors. Right-click for settings.
 ## Author: loggstar
-## Version: 1.3.0
+## Version: 1.3.1
 ## IconTexture: Interface\AddOns\Kibble\icon.png
+## OptionalDeps: EllesmereUI
 ## SavedVariables: KibbleDB, FeedMeDB
 ## AddonCompartmentFunc: Kibble_OnCompartmentClick
 ## AddonCompartmentFuncOnEnter: Kibble_OnCompartmentEnter
