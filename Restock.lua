@@ -171,31 +171,38 @@ local REASONS = {
 	stocked = "Pet food stocked (%d)",
 	bags = "Bags are full",
 	gold = "Can't afford pet food",
-	stock = "Vendor is out of stock",
+	stock = "Out of stock",
 }
 
 local function CreateButton()
 	local b = CreateFrame("Button", "KibbleRestockButton", MerchantFrame, "UIPanelButtonTemplate")
-	-- Right of the last Merchant / Buyback tab, on the same row: the tabs hang under the bottom-left
-	-- of the window, and skins (EllesmereUI) make the window wider than MerchantFrame itself, so a
-	-- corner anchor ends up behind them. Following the tab works for both. Fallback: bottom-right.
-	-- With EllesmereUI's tab look the button takes the tabs' own height, so it reads as one more tab;
-	-- the stock UI keeps a normal 24px button centred on the row.
+	-- On the tab row, filling what is left of it: the left edge follows the last Merchant / Buyback
+	-- tab, the right edge is pinned to the window with the same margin the first tab has on the left.
+	-- (A corner anchor on the left lands behind the tabs, and a fixed width overhangs the window.)
+	-- With EllesmereUI's tab look the button takes the tabs' own height so it reads as one more tab;
+	-- the stock UI keeps a normal 24px button centred on the row. Fallback: bottom-right corner.
 	local lastTab
 	for i = 1, 8 do
 		local tab = _G["MerchantFrameTab" .. i]
 		if not tab then break end
 		lastTab = tab
 	end
-	b:SetWidth(200)
+	local inset = 14
+	local firstTab = _G.MerchantFrameTab1
+	if firstTab and firstTab.GetLeft and MerchantFrame.GetLeft then
+		local l1, l0 = firstTab:GetLeft(), MerchantFrame:GetLeft()
+		if l1 and l0 and l1 - l0 > 0 and l1 - l0 < 60 then inset = l1 - l0 end
+	end
 	if lastTab and ns.SkinActive and ns.SkinActive() then
 		b:SetPoint("TOPLEFT", lastTab, "TOPRIGHT", 2, 0)
 		b:SetPoint("BOTTOMLEFT", lastTab, "BOTTOMRIGHT", 2, 0)
+		b:SetPoint("RIGHT", MerchantFrame, "RIGHT", -inset, 0)
 	elseif lastTab then
 		b:SetHeight(24)
 		b:SetPoint("LEFT", lastTab, "RIGHT", 8, 0)
+		b:SetPoint("RIGHT", MerchantFrame, "RIGHT", -inset, 0)
 	else
-		b:SetHeight(24)
+		b:SetSize(200, 24)
 		b:SetPoint("TOPRIGHT", MerchantFrame, "BOTTOMRIGHT", -10, 2)
 	end
 	b:SetScript("OnClick", function()
@@ -235,7 +242,7 @@ function UpdateButton()
 		button:SetText("Restocking...")
 		button:Disable()
 	elseif plan.qty > 0 then
-		button:SetText(("Restock pet food (buy %d)"):format(plan.qty))
+		button:SetText(("Buy %d pet food"):format(plan.qty))
 		button:Enable()
 	else
 		button:SetText((REASONS[plan.reason] or "Nothing to buy"):format(plan.have))

@@ -13,7 +13,7 @@ Kibble warns you when you have no food your pet will eat.
 - **One click (or key press) feeding.** Picks the food for you. By default it saves your best food: it uses
   the cheapest food that still fully feeds your pet, and the highest level food otherwise.
 - **Pet care.** With no living pet the same button revives a dead pet or calls a missing one, and **Ctrl-click mends**. (Can be switched off under Visibility.)
-- **Vendor restock.** At a vendor that sells food your pet eats, a *Restock pet food (buy N)* button appears under the vendor window and tops you up to your target (20 / 40 / 80 / 120). Nothing is bought until you click it; it respects your gold, bag space and ignore list.
+- **Vendor restock.** At a vendor that sells food your pet eats, a *Buy N pet food* button appears under the vendor window and tops you up to your target (20 / 40 / 80 / 120). Nothing is bought until you click it; it respects your gold, bag space and ignore list.
 - **Mood ring.** Green, yellow or red around the button, pulsing when the pet is not happy.
 - **No-food and low-food warnings.** On-screen message and chat line, rate limited. Optionally warn when you're down to 5, 10 or 20 foods, and play a sound (off by default; pick from four).
 - **Feeding countdown.** A swipe on the button while your pet is eating, driven by the pet's feeding buff.

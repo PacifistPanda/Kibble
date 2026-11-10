@@ -39,7 +39,7 @@ local function recorder()
     if k == "Disable" then return function() st.enabled = false end end
     if k == "IsEnabled" then return function() return st.enabled end end
     if k == "SetScript" then return function(_, e, f) st.scripts[e] = f end end
-    if k == "SetPoint" then return function(_, pt, rel, rp, x, y) st.point = { pt, rel, rp, x, y } end end
+    if k == "SetPoint" then return function(_, pt, rel, rp, x, y) st.point = { pt, rel, rp, x, y }; st.points = st.points or {}; st.points[#st.points + 1] = st.point end end
     if k == "CreateTexture" or k == "CreateFontString" then return function() return proxy() end end
     return function() return p end
   end })
@@ -304,8 +304,10 @@ merchant = {
 }
 reset_food{ [1] = { 11, 3 } }; money = 100000; bought = {}; pending = {}; KibbleDB.settings.restockTarget = 40
 rev(nil, "MERCHANT_SHOW")
-assert(rst.shown and rst.enabled and rst.text == "Restock pet food (buy 40)", "restock button offered: "..tostring(rst.text))
-assert(rst.point[1] == "LEFT" and rst.point[2] == MerchantFrameTab2 and rst.point[3] == "RIGHT", "button follows the last Merchant/Buyback tab, so no skin can cover it")
+assert(rst.shown and rst.enabled and rst.text == "Buy 40 pet food", "restock button offered: "..tostring(rst.text))
+local function hasPoint(pt, rel, rp) for _, q in ipairs(rst.points or {}) do if q[1] == pt and q[2] == rel and q[3] == rp then return true end end return false end
+assert(hasPoint("LEFT", MerchantFrameTab2, "RIGHT"), "button follows the last Merchant/Buyback tab, so no skin can cover it")
+assert(hasPoint("RIGHT", MerchantFrame, "RIGHT"), "and is pinned to the window's right edge, so it never overhangs")
 assert(#bought == 0, "nothing is bought until the button is clicked")
 rst.scripts.OnClick()
 assert(#bought == 1 and bought[1] == 20, "first purchase is capped at the per-purchase maximum")
@@ -320,13 +322,13 @@ print("restock buy loop OK")
 
 -- limits
 reset_food{ [1] = { 11, 3 } }; money = 100; rev(nil, "MERCHANT_UPDATE")
-assert(rst.text == "Restock pet food (buy 20)", "limited by gold (4 bundles): "..tostring(rst.text))
+assert(rst.text == "Buy 20 pet food", "limited by gold (4 bundles): "..tostring(rst.text))
 money = 100000
 reset_food{ [1] = { 11, 3 }, [2] = { 10, 3 }, [3] = { 12, 3 }, [4] = { 999, 3 } }; rev(nil, "MERCHANT_UPDATE")
 assert(rst.text == "Bags are full" and not rst.enabled, "bags full: "..tostring(rst.text))
 reset_food{ [1] = { 11, 3 } }
 local food3 = find(menuRoot, "Food")
-find(food3, "20").set(); assert(rst.text == "Restock pet food (buy 20)", "target from the menu applies at once: "..tostring(rst.text))
+find(food3, "20").set(); assert(rst.text == "Buy 20 pet food", "target from the menu applies at once: "..tostring(rst.text))
 KibbleDB.settings.restockTarget = 40
 petExists = false; rev(nil, "UNIT_PET"); assert(not rst.shown, "hidden without a pet")
 petExists = true; rev(nil, "UNIT_PET"); assert(rst.shown)
@@ -343,12 +345,12 @@ merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }
 reset_food{ [1] = { 11, 3 } }; money = 100000; petExists = false
 ev(nil, "UNIT_PET", "player"); rev(nil, "MERCHANT_SHOW"); assert(not rst.shown, "no button while the pet is missing")
 petExists = true; ev(nil, "UNIT_PET", "player")
-assert(rst.shown and rst.text == "Restock pet food (buy 40)", "button appears once the pet is back, without a vendor event: "..tostring(rst.text))
+assert(rst.shown and rst.text == "Buy 40 pet food", "button appears once the pet is back, without a vendor event: "..tostring(rst.text))
 -- picks among affordable foods instead of failing on the best one
 lvl[22] = 5; lvl[23] = 30
 merchant = { { id = 23, price = 500, stack = 1, maxStack = 20 }, { id = 22, price = 5, stack = 1, maxStack = 20 } }
 money = 100; KibbleDB.settings.foodMode = "save"; rev(nil, "MERCHANT_UPDATE")
-assert(rst.text == "Restock pet food (buy 20)", "buys the affordable food when the best is too dear: "..tostring(rst.text))
+assert(rst.text == "Buy 20 pet food", "buys the affordable food when the best is too dear: "..tostring(rst.text))
 money = 1; rev(nil, "MERCHANT_UPDATE"); assert(rst.shown and not rst.enabled and rst.text == "Can't afford pet food", "says why when nothing is affordable: "..tostring(rst.text))
 money = 100000; merchant = { { id = 20, price = 25, stack = 5, maxStack = 20 } }; rev(nil, "MERCHANT_UPDATE")
 print("restock follows pet + affordability OK")
@@ -422,8 +424,8 @@ EllesmereUI = savedEUI
 local n0 = #frames
 local ns3 = { core = ns.core, Skin = function() end, SkinActive = function() return true end }
 assert(loadfile(dir .. "/Restock.lua"))("Kibble", ns3)
-frames[n0 + 1].st["script:OnEvent"](nil, "MERCHANT_SHOW")
-assert(rst.point[1] == "BOTTOMLEFT" and rst.point[2] == MerchantFrameTab2 and rst.point[3] == "BOTTOMRIGHT", "tab-look button matches the tab row height")
+local rev3 = frames[n0 + 1].st["script:OnEvent"]; rst.points = {}; rev3(nil, "MERCHANT_SHOW")
+assert(hasPoint("TOPLEFT", MerchantFrameTab2, "TOPRIGHT") and hasPoint("BOTTOMLEFT", MerchantFrameTab2, "BOTTOMRIGHT") and hasPoint("RIGHT", MerchantFrame, "RIGHT"), "tab-look button: tab row height, filling to the window edge")
 print("EllesmereUI skin OK")
 
 -- sound-off migration (settings saved by 1.1.0 had alertSound = true as the old default)
