@@ -51,6 +51,7 @@ local DEFAULTS = {
 	foodMode    = "save",  -- "save" = cheapest food that still gives full happiness; "best" = highest level;
 	                       -- "stack" = smallest stack among the foods that still give full happiness
 	visibility  = "always", -- "always" | "unhappy" (fades while happy) | "hidden"
+	skipHappy   = true,    -- a happy pet is not fed: the button leaves Feed Pet out of its macro
 	petCare     = true,    -- the button also revives a dead pet / calls a missing one (Ctrl-click mends)
 	restockTarget = 40,    -- vendor restock: buy up to this many of the chosen food
 	showMinimap = true,    -- minimap button
@@ -450,7 +451,8 @@ end
 
 -- The click macro. With pet care on, the conditionals pick the action when you click, so it keeps
 -- working through combat: revive a dead pet, call a missing one, Ctrl-click mends, otherwise feed.
-local function BuildMacro(foodID)
+local function BuildMacro(foodID, refuse)
+	if refuse then foodID = nil end -- happy pet: nothing to feed (Call / Revive / Mend stay)
 	if not S.petCare then
 		if foodID then
 			return "/cast " .. FeedPetName() .. "\n/use item:" .. foodID
@@ -473,6 +475,7 @@ local function BuildMacro(foodID)
 end
 
 local appliedMacroKey
+local refusing = false -- the applied macro leaves Feed Pet out because the pet is happy
 
 local function ApplySecure(foodID)
 	if InCombatLockdown() then
@@ -481,11 +484,15 @@ local function ApplySecure(foodID)
 	end
 	pendingSecure = false
 	-- the macro depends on the food and on the pet-care setting
-	local key = (foodID or "none") .. (S.petCare and "+care" or "")
+	-- a happy pet is not fed (the macro can't test happiness at click time, so it is rebuilt when the
+	-- mood changes; in combat that waits for combat to end like every other macro change)
+	local refuse = S.skipHappy and GetHappiness() == 3
+	local key = (foodID or "none") .. (S.petCare and "+care" or "") .. (refuse and "+happy" or "")
 	if key == appliedMacroKey and button:GetAttribute("macrotext") then return end
 	appliedMacroKey = key
 	currentFood = foodID
-	button:SetAttribute("macrotext", BuildMacro(foodID))
+	refusing = refuse and true or false
+	button:SetAttribute("macrotext", BuildMacro(foodID, refuse))
 end
 
 -- Feed Pet is an ordinary cast: while the pet eats it carries a buff, so the countdown is read
@@ -780,6 +787,8 @@ local function BuildMenu(_, root)
 	end)
 
 	local food = root:CreateButton("Food")
+	AddChecks(food, { { "Don't feed a happy pet", "skipHappy" } })
+	food:CreateDivider()
 	food:CreateTitle("Which food to use")
 	AddRadios(food, FOOD_MODES, "foodMode")
 	food:CreateDivider()
@@ -829,9 +838,14 @@ local lastNoFoodMsg = 0
 button:HookScript("OnClick", function(_, mouseButton, down)
 	if mouseButton == "RightButton" then
 		if not down then OpenMenu() end
-	elseif PetIsOut() and not currentFood and not IsControlKeyDown() and GetTime() - lastNoFoodMsg > 1 then
-		lastNoFoodMsg = GetTime()
-		Print("no food your pet will eat in your bags.")
+	elseif PetIsOut() and not IsControlKeyDown() and GetTime() - lastNoFoodMsg > 1 then
+		if refusing and S.skipHappy then
+			lastNoFoodMsg = GetTime()
+			Print("your pet is already happy - not feeding.")
+		elseif not currentFood then
+			lastNoFoodMsg = GetTime()
+			Print("no food your pet will eat in your bags.")
+		end
 	end
 end)
 

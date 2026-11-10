@@ -81,7 +81,8 @@ petExists, petDead = true, false
 UnitExists = function() return petExists end; UnitIsDead = function() return petDead end
 IsControlKeyDown = function() return false end
 UnitLevel = function() return 20 end
-C_PetInfo = { GetPetHappiness = function() return 3 end, CanPetEatItem = function(id) return id ~= 999 end }
+happiness = 2 -- content by default; tests set 3 for a happy pet
+C_PetInfo = { GetPetHappiness = function() return happiness end, CanPetEatItem = function(id) return id ~= 999 end }
 local items = { [1] = { 10, 20 }, [2] = { 11, 5 }, [3] = { 12, 3 }, [4] = { 999, 9 } }  -- slot -> {id, count}
 local lvl = { [10] = 5, [11] = 16, [12] = 25 }
 scans = 0
@@ -191,7 +192,9 @@ local look = find(menuRoot, "Appearance")
 find(look, "Large").set(); assert(KibbleDB.profiles.Default.size == 52 and bstore.size == 52, "size applied")
 find(look, "50%").set();   assert(bstore.alpha == 0.5)
 local vis = find(menuRoot, "Visibility")
+happiness = 3
 find(vis, "Fade while pet is happy").set(); assert(math.abs(bstore.alpha - 0.075) < 1e-9, "fades while happy: "..tostring(bstore.alpha))
+happiness = 2
 find(vis, "Hidden (use /kibble config to open this menu)").set(); assert(drivers[#drivers] == "hide")
 find(vis, "Always show").set(); assert(drivers[#drivers] == "show")
 
@@ -284,6 +287,39 @@ find(vis3, CARE).set()
 assert(macro():find("Revive Pet") and drivers[#drivers] == "show", "care back on")
 print("pet-care macro OK")
 
+-- happy pet: Feed Pet is left out of the macro, and the click says why
+do
+	local P = KibbleDB.profiles.Default
+	assert(P.skipHappy == true, "don't-feed-a-happy-pet is on by default")
+	happiness = 3; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(not macro():find("Feed Pet") and not macro():find("item:") and macro():find("Call Pet") and macro():find("Revive Pet") and macro():find("Mend Pet"),
+		"happy pet: no feed branch, pet care stays: "..macro())
+	chatlog = {}; clock = clock + 10
+	bstore["hook:OnClick"](btn, "LeftButton", false)
+	assert(#chatlog == 1 and chatlog[1]:find("already happy"), "refused click explains itself: "..tostring(chatlog[1]))
+	bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 1, "message is rate limited")
+	happiness = 2; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(macro():find("Feed Pet") and macro():find("item:"), "content pet is fed again: "..macro())
+	chatlog = {}; clock = clock + 10; bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 0, "no message when feeding")
+	-- the macro cannot change in combat; it catches up afterwards
+	happiness = 3; combat = true; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(macro():find("Feed Pet"), "no rewrite during combat")
+	combat = false; ev(nil, "PLAYER_REGEN_ENABLED")
+	assert(not macro():find("Feed Pet"), "rewritten after combat")
+	-- unreadable mood: feed as before
+	happiness = nil; ev(nil, "UNIT_HAPPINESS", "pet"); assert(macro():find("Feed Pet"), "unknown mood feeds")
+	-- switched off: a happy pet is fed
+	happiness = 3; P.skipHappy = false; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(macro():find("Feed Pet"), "setting off feeds a happy pet")
+	chatlog = {}; clock = clock + 10; bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 0, "no refusal message when off")
+	-- care off + happy: nothing to cast
+	P.skipHappy = true; P.petCare = false; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(macro() == "", "care off + happy pet: empty macro: "..macro())
+	P.petCare = true; happiness = 2; ev(nil, "UNIT_HAPPINESS", "pet")
+	assert(find(find(menuRoot, "Food"), "Don't feed a happy pet"), "menu entry exists")
+end
+print("happy pet is not fed OK")
+
 -- dead / missing pet: icon + no nagging, and the button is not faded
 petDead = true; ev(nil, "UNIT_HEALTH", "pet"); assert(lastTexture == 1982, "dead pet shows Revive Pet icon: "..tostring(lastTexture))
 petDead = false; petExists = false; ev(nil, "UNIT_HEALTH", "pet"); assert(lastTexture == 1883, "missing pet shows Call Pet icon: "..tostring(lastTexture))
@@ -291,8 +327,9 @@ reset_food{}; chatlog = {}; clock = clock + 10
 bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 0, "no 'no food' message while the pet is missing")
 find(vis3, "Fade while pet is happy").set()
 assert(bstore.alpha == KibbleDB.profiles.Default.opacity, "not faded while offering to call the pet: "..tostring(bstore.alpha))
-petExists = true; ev(nil, "UNIT_PET", "player")
+happiness = 3; petExists = true; ev(nil, "UNIT_PET", "player")
 assert(bstore.alpha < KibbleDB.profiles.Default.opacity, "faded again once the pet is back and happy")
+happiness = 2
 find(vis3, "Always show").set()
 clock = clock + 10; bstore["hook:OnClick"](btn, "LeftButton", false); assert(#chatlog == 1 and chatlog[1]:find("no food"), "message returns with a living pet")
 lastTexture = nil; ev(nil, "UNIT_HEALTH", "pet"); assert(lastTexture == nil, "health ticks without a state change do not refresh")
@@ -375,13 +412,13 @@ print("vendor diagnostic OK")
 -- ===== options panel, minimap button, compartment =====
 assert(type(Kibble_OnCompartmentClick) == "function" and type(Kibble_OnCompartmentEnter) == "function", "compartment globals")
 frames[3].st["script:OnEvent"](frames[3].p, "PLAYER_LOGIN")
-assert(panelRegistered == "Kibble" and #checks == 10, "panel registered with 10 options")
+assert(panelRegistered == "Kibble" and #checks == 11, "panel registered with 11 options")
 local panelFrame = frames[4].st
 KibbleDB.profiles.Default.alertScreen = false; panelFrame["script:OnShow"](); assert(checks[1].checked == false and checks[2].checked == KibbleDB.profiles.Default.alertChat, "panel shows current settings")
 KibbleDB.profiles.Default.alertScreen = true
-checks[9].checked = false; checks[9].scripts.OnClick(checks[9].obj)
+checks[10].checked = false; checks[10].scripts.OnClick(checks[10].obj)
 assert(KibbleDB.profiles.Default.petCare == false and macro():find("^/cast Feed Pet") and not macro():find("Revive"), "panel checkbox applies (care off -> plain feed macro): "..macro())
-checks[9].checked = true; checks[9].scripts.OnClick(checks[9].obj); assert(KibbleDB.profiles.Default.petCare == true)
+checks[10].checked = true; checks[10].scripts.OnClick(checks[10].obj); assert(KibbleDB.profiles.Default.petCare == true)
 assert(mst.shown, "minimap button shown by default")
 local ang = KibbleDB.minimapAngle or 3.93 -- unset until the button is dragged
 assert(math.abs(mst.point[4] - math.cos(ang) * 75) < 1e-6 and math.abs(mst.point[5] - math.sin(ang) * 75) < 1e-6, "minimap placement")
@@ -389,7 +426,7 @@ mst.scripts.OnDragStart(mbtn); assert(mst.scripts.OnUpdate, "dragging tracks the
 mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.minimapAngle) < 1e-6 and math.abs(mst.point[4] - 75) < 1e-6, "angle follows the cursor")
 cursor = { 500, 575 }; mst.scripts.OnUpdate(); assert(math.abs(KibbleDB.minimapAngle - math.pi / 2) < 1e-6)
 mst.scripts.OnDragStop(mbtn); assert(mst.scripts.OnUpdate == nil, "drag ends cleanly")
-checks[10].checked = false; checks[10].scripts.OnClick(checks[10].obj); assert(mst.shown == false, "panel can hide the minimap button")
+checks[11].checked = false; checks[11].scripts.OnClick(checks[11].obj); assert(mst.shown == false, "panel can hide the minimap button")
 find(find(menuRoot, "Appearance"), "Show minimap button").set(); assert(mst.shown == true, "menu can show it again")
 menuRoot = nil; mst.scripts.OnClick(mbtn, "LeftButton"); assert(menuRoot, "minimap left-click opens the menu")
 opened = nil; mst.scripts.OnClick(mbtn, "RightButton"); assert(opened == 99, "minimap right-click opens the options panel")
@@ -403,7 +440,7 @@ assert(skinName == "Kibble" and type(skinFn) == "function", "registered with Ell
 assert(#skinCalls == 0, "nothing is skinned before EllesmereUI hands over its facade")
 skinFn(Sstub)
 local function skinCount(kind) local n = 0 for _, c in ipairs(skinCalls) do if c[1] == kind then n = n + 1 end end return n end
-assert(skinCount("Tab") == 1 and skinCount("Button") == 1 and skinCount("Checkbox") == 10 and skinCount("StateButtonLabel") == 0,
+assert(skinCount("Tab") == 1 and skinCount("Button") == 1 and skinCount("Checkbox") == 11 and skinCount("StateButtonLabel") == 0,
   ("queued widgets skinned once each (Tab %d, Button %d, Checkbox %d)"):format(skinCount("Tab"), skinCount("Button"), skinCount("Checkbox")))
 local sawTab = false for _, c in ipairs(skinCalls) do if c[2] == rbtn and c[1] == "Tab" then sawTab = true end end
 assert(sawTab, "the vendor restock button gets the window's tab look")

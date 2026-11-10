@@ -9,6 +9,9 @@
   menu). Imports are validated: only known settings with valid values are accepted, anything else is
   skipped and counted.
 - Profile commands: `/kibble profile` lists them, `/kibble profile <name>` switches.
+- A happy pet is no longer fed: while its mood is green the button leaves Feed Pet out (Call / Revive /
+  Mend still work) and clicking says "your pet is already happy". Option *Don't feed a happy pet* in
+  Food (on by default; also in the options panel and in profiles).
 - A profile holds all settings and the ignore list. The button position and the minimap button angle stay
   per account.
 

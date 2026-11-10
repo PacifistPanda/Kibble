@@ -117,6 +117,7 @@ local PANEL_OPTIONS = {
 	{ "Show \"NO FOOD\" text", "showNoFood" },
 	{ "Show feeding countdown", "showFeeding" },
 	{ "Lock position", "locked" },
+	{ "Don't feed a happy pet", "skipHappy" },
 	{ "Revive / call a missing pet (Ctrl-click mends)", "petCare" },
 	{ "Show minimap button", "showMinimap" },
 }

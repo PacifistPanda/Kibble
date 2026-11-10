@@ -28,7 +28,7 @@ ns.Profiles = P
 
 local BOOLEANS = {
 	alertScreen = true, alertChat = true, alertSound = true, hungryHint = true, showFeeding = true,
-	locked = true, showCount = true, showNoFood = true, petCare = true, showMinimap = true,
+	locked = true, showCount = true, showNoFood = true, petCare = true, skipHappy = true, showMinimap = true,
 }
 local NUMBERS = {
 	throttle = { 15, 30, 60 }, lowFood = { 0, 5, 10, 20 }, size = { 32, 40, 52, 64 },
