@@ -1,3 +1,5 @@
+<p align="center"><img src="icon.png" alt="Kibble icon" width="96"></p>
+
 # Kibble
 
 One button to feed your hunter pet, for **WoW Forever** (interface 16001).
